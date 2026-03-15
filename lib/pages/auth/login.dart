@@ -8,11 +8,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  // Variables
+  final _formKey =
+      GlobalKey<FormState>(); // No idea what this is but is IMPORTANT
   bool showOptions = true; // This shows the option of either student or faculty
   bool isStudent = false; // Check if it's a student or a faculty
-
   bool isMailSent = false; // For animation of sending something
   // Class methods
   String? validateEmail(String? value) {
@@ -39,6 +38,29 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  void _showHelp() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.5, // half the screen
+          padding: EdgeInsets.all(69),
+          // margin: EdgeInsets.all(100),
+          child: Column(
+            children: [
+              Text("Hello, just ask someone."),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text("Close"),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -59,6 +81,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             showOptions = false;
                           });
                         },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                        ),
                         child: Text("Student"),
                       ),
                       SizedBox(height: 10),
@@ -69,6 +96,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             showOptions = false;
                           });
                         },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                        ),
                         child: Text("Faculty"),
                       ),
                     ],
@@ -80,17 +112,33 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text("APP LOGO"),
-                          Text("Campus Link"),
+                          Icon(
+                            Icons.message,
+                            size: 60,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          SizedBox(height: 100),
+                          Text(
+                            "Welcome back, to Campus Link!",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          SizedBox(height: 20),
                           TextFormField(
                             keyboardType: TextInputType.emailAddress,
                             decoration: const InputDecoration(
                               labelText: "Carsu Email",
                               border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.email),
+                              prefixIcon: Icon(
+                                Icons.email,
+                                color: Colors.black87,
+                              ),
                             ),
                             validator: validateEmail,
                           ),
+                          SizedBox(height: 10),
                           ElevatedButton(
                             onPressed: isMailSent
                                 ? null
@@ -107,7 +155,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                     }
                                   },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.lightBlueAccent,
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              minimumSize: const Size.fromHeight(50),
                             ),
                             child: isMailSent
                                 ? SizedBox(
@@ -125,7 +176,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             "By continuing, you agree to our Terms of Service",
                           ),
                           SizedBox(height: 40),
-                          Text("[ Need help? ]"),
+                          GestureDetector(
+                            onTap: _showHelp,
+                            child: Text(
+                              "Need help?",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),

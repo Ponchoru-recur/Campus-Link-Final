@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:luminescence/pages/nav_bar.dart';
+import 'package:luminescence/components/nav_bar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,7 +15,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       drawer: NavBar(),
-      appBar: AppBar(title: Text("Home")),
+      appBar: AppBar(title: Text("Assign")),
       body: Scaffold(),
     );
   }
