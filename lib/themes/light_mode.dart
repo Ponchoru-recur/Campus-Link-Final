@@ -35,9 +35,7 @@ ThemeData get lightMode {
         fontWeight: FontWeight.w600,
         color: AppColors.lightOnPrimary,
       ),
-      iconTheme: IconThemeData(
-        color: AppColors.lightOnPrimary,
-      ),
+      iconTheme: IconThemeData(color: AppColors.lightOnPrimary),
     ),
 
     // --- CARDS ---
@@ -45,9 +43,7 @@ ThemeData get lightMode {
       color: AppColors.lightSurfaceContainer,
       elevation: 2,
       shadowColor: Colors.black.withValues(alpha: 0.1),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     ),
 
@@ -82,13 +78,8 @@ ThemeData get lightMode {
         foregroundColor: AppColors.lightOnPrimary,
         elevation: 2,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
     ),
 
@@ -97,23 +88,15 @@ ThemeData get lightMode {
         foregroundColor: AppColors.lightPrimary,
         side: const BorderSide(color: AppColors.lightPrimary),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
     ),
 
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: AppColors.lightPrimary,
-        textStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     ),
 
@@ -208,18 +191,9 @@ ThemeData get lightMode {
         fontWeight: FontWeight.w500,
         color: AppColors.lightTextPrimary,
       ),
-      bodyLarge: TextStyle(
-        fontSize: 16,
-        color: AppColors.lightTextPrimary,
-      ),
-      bodyMedium: TextStyle(
-        fontSize: 14,
-        color: AppColors.lightTextSecondary,
-      ),
-      bodySmall: TextStyle(
-        fontSize: 12,
-        color: AppColors.lightTextTertiary,
-      ),
+      bodyLarge: TextStyle(fontSize: 16, color: AppColors.lightTextPrimary),
+      bodyMedium: TextStyle(fontSize: 14, color: AppColors.lightTextSecondary),
+      bodySmall: TextStyle(fontSize: 12, color: AppColors.lightTextTertiary),
       labelLarge: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
@@ -238,26 +212,20 @@ ThemeData get lightMode {
     ),
 
     // --- ICONS ---
-    iconTheme: const IconThemeData(
-      color: AppColors.lightTextSecondary,
-    ),
+    iconTheme: const IconThemeData(color: AppColors.lightTextSecondary),
 
     // --- SNACKBAR ---
     snackBarTheme: SnackBarThemeData(
       backgroundColor: AppColors.lightTextPrimary,
       contentTextStyle: const TextStyle(color: Colors.white),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       behavior: SnackBarBehavior.floating,
     ),
 
     // --- DIALOG ---
     dialogTheme: DialogThemeData(
       backgroundColor: AppColors.lightSurfaceContainer,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
 
     // --- BOTTOM SHEET ---

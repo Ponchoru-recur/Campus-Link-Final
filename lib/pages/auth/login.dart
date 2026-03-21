@@ -1,4 +1,7 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+import 'package:hive_ce/hive.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,31 +14,22 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey =
       GlobalKey<FormState>(); // No idea what this is but is IMPORTANT
   bool showOptions = true; // This shows the option of either student or faculty
-  bool isStudent = false; // Check if it's a student or a faculty
-  bool isMailSent = false; // For animation of sending something
+
+  final emailController = TextEditingController();
+
   // Class methods
-  String? validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Please enter your email';
+  String? validateEmail(String? email) {
+    if (email == null || email.isEmpty) {
+      return "Email cannot be empty";
     }
-
-    if (value.contains('admin')) {
-      return null;
-    }
-
-    if (!value.contains('@carsu.edu.ph')) {
+    if (!email.endsWith('@carsu.edu.ph') || !(email.length > 13)) {
       return 'Please use your @carsu.edu.ph email';
     }
-
     return null;
   }
 
-  void _gotoGmail() {
-    if (!mounted) return;
-    Navigator.pushNamed(context, '/gmail');
-    setState(() {
-      isMailSent = false;
-    });
+  void login(String email) {
+    print("[LOG] Account does not exist");
   }
 
   void _showHelp() {
@@ -61,9 +55,40 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  bool _isLoading = false;
+  bool _isVerified = false;
+
+  void _handleLogin() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true; // show loading spinner
+    });
+
+    // Wait for 3 seconds
+    await Future.delayed(Duration(seconds: 3));
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false; // hide spinner
+      _isVerified = true; // show verified text
+    });
+
+    await Future.delayed(Duration(seconds: 1));
+    if (!mounted) return;
+    // Navigate using pushNamed
+    var userBox = Hive.box("CURRENT_USER");
+    userBox.put('email', emailController.text);
+
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/home',
+      (Route<dynamic> route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // backgroundColor: Theme.of(context,
       body: Container(
         padding: EdgeInsets.all(16),
         child: Center(
@@ -77,7 +102,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ElevatedButton(
                         onPressed: () {
                           setState(() {
-                            isStudent = true;
                             showOptions = false;
                           });
                         },
@@ -92,7 +116,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ElevatedButton(
                         onPressed: () {
                           setState(() {
-                            isStudent = false;
                             showOptions = false;
                           });
                         },
@@ -112,21 +135,26 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.message,
-                            size: 60,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          SizedBox(height: 100),
                           Text(
-                            "Welcome back, to Campus Link!",
+                            "Log in",
                             style: TextStyle(
-                              fontSize: 16,
-                              color: Theme.of(context).colorScheme.primary,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
                             ),
                           ),
-                          SizedBox(height: 20),
+                          SizedBox(height: 10),
+                          Text(
+                            "Enter your Carsu and press login to securely access your account and manage your services.",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.black87,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: 30),
                           TextFormField(
+                            controller: emailController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: const InputDecoration(
                               labelText: "Carsu Email",
@@ -140,27 +168,21 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           SizedBox(height: 10),
                           ElevatedButton(
-                            onPressed: isMailSent
+                            onPressed: _isLoading || _isVerified
                                 ? null
                                 : () {
                                     if (_formKey.currentState!.validate()) {
-                                      //   print("Email : valid!");
-                                      setState(() {
-                                        isMailSent = true;
-                                      });
-                                      Future.delayed(
-                                        Duration(milliseconds: 400),
-                                        _gotoGmail,
-                                      );
+                                      _handleLogin();
                                     }
                                   },
+
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Theme.of(
                                 context,
                               ).colorScheme.primary,
                               minimumSize: const Size.fromHeight(50),
                             ),
-                            child: isMailSent
+                            child: _isLoading
                                 ? SizedBox(
                                     height: 18,
                                     width: 18,
@@ -169,13 +191,37 @@ class _LoginScreenState extends State<LoginScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : Text("Send Magic Link"),
+                                : _isVerified
+                                ? Text("Verified")
+                                : Text("Login"),
                           ),
-                          SizedBox(height: 20),
+                          SizedBox(height: 15),
+                          RichText(
+                            text: TextSpan(
+                              text: "Don't have an account? ",
+                              style: TextStyle(color: Colors.black87),
+                              children: [
+                                TextSpan(
+                                  text: "Sign up here",
+                                  style: TextStyle(
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = () {
+                                      Navigator.of(
+                                        context,
+                                      ).pushNamed("/register");
+                                    },
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 10),
                           Text(
                             "By continuing, you agree to our Terms of Service",
                           ),
-                          SizedBox(height: 40),
+                          SizedBox(height: 10),
                           GestureDetector(
                             onTap: _showHelp,
                             child: Text(
@@ -185,6 +231,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                 color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              var userBox = Hive.box("CURRENT_USER");
+                              var groupBox = Hive.box("GROUP_CHATS");
+                              var messagesBox = Hive.box("MESSAGES");
+                              userBox.clear();
+                              groupBox.clear();
+                              messagesBox.clear();
+                            },
+                            child: Text("Reset"),
                           ),
                         ],
                       ),

@@ -41,7 +41,9 @@ class _NavBarState extends State<NavBar> {
             child: ListTile(
               leading: Icon(Icons.school),
               title: Text("Profile"),
-              onTap: () {},
+              onTap: () {
+                Navigator.pushNamed(context, '/profile');
+              },
             ),
           ),
           Padding(
@@ -59,7 +61,9 @@ class _NavBarState extends State<NavBar> {
             child: ListTile(
               leading: Icon(Icons.assignment),
               title: Text("Assigments"),
-              onTap: () {},
+              onTap: () {
+                Navigator.pushNamed(context, '/assignment');
+              },
               trailing: ClipOval(
                 child: Container(
                   color: Colors.redAccent,
@@ -80,7 +84,9 @@ class _NavBarState extends State<NavBar> {
             child: ListTile(
               leading: Icon(Icons.announcement),
               title: Text("Announcements"),
-              onTap: () {},
+              onTap: () {
+                Navigator.pushNamed(context, '/announcement');
+              },
             ),
           ),
           Divider(),
@@ -89,7 +95,9 @@ class _NavBarState extends State<NavBar> {
             child: ListTile(
               leading: Icon(Icons.settings),
               title: Text("Settings"),
-              onTap: () {},
+              onTap: () {
+                Navigator.pushNamed(context, '/setting');
+              },
             ),
           ),
           Padding(

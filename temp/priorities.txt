@@ -1,0 +1,15 @@
+1.Home/Dashboard + Class List
+
+2.Class Channel Chat
+
+3.Profile + Settings
+
+4.Create Announcement
+
+5.Fake Gmail Flow
+
+6.File upload/download UI
+
+7.Do Not Disturb
+
+8.Polish & Testing
