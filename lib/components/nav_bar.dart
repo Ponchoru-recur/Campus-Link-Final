@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:luminescence/pages/auth/auth_service.dart';
 
 class NavBar extends StatefulWidget {
   const NavBar({super.key});
@@ -8,6 +9,12 @@ class NavBar extends StatefulWidget {
 }
 
 class _NavBarState extends State<NavBar> {
+  // Logout the user
+  void logout() {
+    final auth = AuthService();
+    auth.signOut();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -52,7 +59,7 @@ class _NavBarState extends State<NavBar> {
               leading: Icon(Icons.book),
               title: Text("Channels"),
               onTap: () {
-                Navigator.pushNamed(context, '/groupchat');
+                Navigator.pushNamed(context, '/channel');
               },
             ),
           ),
@@ -123,9 +130,8 @@ class _NavBarState extends State<NavBar> {
               leading: Icon(Icons.logout),
               title: Text("Log out"),
               onTap: () {
-                Navigator.of(
-                  context,
-                ).pushNamedAndRemoveUntil('/', (Route<dynamic> route) => false);
+                // Log user out and return to home screemn
+                logout();
               },
             ),
           ),

@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-
-import 'package:hive_ce/hive.dart';
+import 'package:luminescence/pages/auth/auth_service.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool showOptions = true; // This shows the option of either student or faculty
 
   final emailController = TextEditingController();
+  final passwordController = TextEditingController();
 
   // Class methods
   String? validateEmail(String? email) {
@@ -28,8 +29,12 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
-  void login(String email) {
-    print("[LOG] Account does not exist");
+  String? validatePassword(String? password) {
+    if (password == null || password.isEmpty) {
+      return "Password cannot be empty";
+    }
+
+    return null;
   }
 
   void _showHelp() {
@@ -57,32 +62,57 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   bool _isVerified = false;
+  String? _errorMessage;
 
   void _handleLogin() async {
     if (!mounted) return;
+
     setState(() {
-      _isLoading = true; // show loading spinner
+      _isLoading = true;
+      _errorMessage = null;
     });
 
-    // Wait for 3 seconds
-    await Future.delayed(Duration(seconds: 3));
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false; // hide spinner
-      _isVerified = true; // show verified text
-    });
+    final authService = AuthService();
 
-    await Future.delayed(Duration(seconds: 1));
-    if (!mounted) return;
-    // Navigate using pushNamed
-    var userBox = Hive.box("CURRENT_USER");
-    userBox.put('email', emailController.text);
+    try {
+      await authService.signInWithEmailPassword(
+        emailController.text,
+        passwordController.text,
+      );
 
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/home',
-      (Route<dynamic> route) => false,
-    );
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isVerified = true;
+      });
+
+      await Future.delayed(Duration(seconds: 1));
+
+      // Navigate to home
+      // Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isVerified = false;
+        _errorMessage = e.toString();
+      });
+
+      // Show error briefly, then reset button
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_errorMessage ?? 'Login failed'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      // Reset to original state after showing error
+      await Future.delayed(Duration(seconds: 2));
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = null;
+      });
+    }
   }
 
   @override
@@ -166,6 +196,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             validator: validateEmail,
                           ),
+                          SizedBox(height: 15),
+                          TextFormField(
+                            obscureText: true,
+                            controller: passwordController,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: const InputDecoration(
+                              labelText: "Password",
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(
+                                Icons.email,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            validator: validatePassword,
+                          ),
                           SizedBox(height: 10),
                           ElevatedButton(
                             onPressed: _isLoading || _isVerified
@@ -195,6 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? Text("Verified")
                                 : Text("Login"),
                           ),
+
                           SizedBox(height: 15),
                           RichText(
                             text: TextSpan(
@@ -217,10 +263,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               ],
                             ),
                           ),
-                          SizedBox(height: 10),
+                          SizedBox(height: 15),
                           Text(
-                            "By continuing, you agree to our Terms of Service",
+                            "By continuing, you agree to our Terms of Service ",
+                            textAlign: TextAlign.center,
                           ),
+
                           SizedBox(height: 10),
                           GestureDetector(
                             onTap: _showHelp,
@@ -231,17 +279,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              var userBox = Hive.box("CURRENT_USER");
-                              var groupBox = Hive.box("GROUP_CHATS");
-                              var messagesBox = Hive.box("MESSAGES");
-                              userBox.clear();
-                              groupBox.clear();
-                              messagesBox.clear();
-                            },
-                            child: Text("Reset"),
                           ),
                         ],
                       ),

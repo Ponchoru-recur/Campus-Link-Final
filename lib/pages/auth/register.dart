@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:hive_ce/hive.dart';
+import 'package:luminescence/components/my_text_field.dart';
+import 'package:luminescence/pages/auth/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -11,25 +12,13 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final emailController = TextEditingController(); // Text For email
+  final passwordController = TextEditingController(); // Hold the password
+  final confirmPasswordController = TextEditingController();
   final idController = TextEditingController(); // Text for ID
   final _formKey = GlobalKey<FormState>();
 
-  String emailtest = '';
-
   @override
   Widget build(BuildContext context) {
-    // Register the user
-    void register(String email, String id) {
-      if (email.isEmpty || id.isEmpty) {
-        print("[Error] could not register account");
-        return;
-      }
-      // Access the box directly
-      var userBox = Hive.box("CURRENT_USER");
-      userBox.put(email, {"id": id, 'email': email});
-      emailtest = email;
-    }
-
     String? validateEmail(String? email) {
       if (email == null || email.isEmpty) {
         return "Email cannot be empty";
@@ -41,15 +30,71 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return null;
     }
 
-    String? validateID(String? id) {
-      if (id == null || id.isEmpty) {
-        return 'ID cannot be empty';
-      }
-      if (id.length > 9) {
-        return 'ID does not exceed 9 characters';
+    String? validateID(String? value) {
+      if (value == null || value.isEmpty) {
+        return "ID cannot be empty";
       }
 
+      final pattern = RegExp(r'^\d{3}-\d{5}$');
+
+      if (!pattern.hasMatch(value)) {
+        return "Invalid ID format. Use 000-00000";
+      }
+
+      return null; // valid
+    }
+
+    String? validatePassword(String? password) {
+      if (password == null || password.isEmpty) {
+        return "Password cannot be empty";
+      }
+
+      if (!(password.length >= 8)) {
+        return 'Password minimum 8 characters';
+      }
       return null;
+    }
+
+    // Register the user
+    void register(
+      BuildContext context,
+      String email,
+      String password,
+      String confirmPassword,
+    ) {
+      final auth = AuthService();
+      if (email.isEmpty || password.isEmpty) {
+        return;
+      }
+      // Only create account if two passwords matches
+      if (password == confirmPassword) {
+        try {
+          auth.signUpWithEmailPassword(email, password);
+          showDialog(
+            context: context,
+            builder: (context) =>
+                SimpleDialog(title: const Text("Account created!")),
+          );
+          // Clear the typing in the text Form field
+          emailController.clear();
+          passwordController.clear();
+          confirmPasswordController.clear();
+          idController.clear();
+        } catch (e) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(title: Text(e.toString())),
+          );
+        }
+      }
+      // password don't match -> tell user to fix
+      else {
+        showDialog(
+          context: context,
+          builder: (context) =>
+              AlertDialog(title: const Text("Password don't match!")),
+        );
+      }
     }
 
     return Scaffold(
@@ -85,67 +130,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         textAlign: TextAlign.center,
                       ),
                       SizedBox(height: 20),
-                      TextFormField(
-                        controller: idController,
-                        keyboardType: TextInputType.text,
-                        decoration: InputDecoration(
-                          labelText: "Student ID",
-
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(color: Colors.grey),
-                          ),
-
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-
-                          prefixIcon: Icon(
-                            Icons.power_input,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        validator: validateID,
-                      ),
-                      SizedBox(height: 30),
-                      TextFormField(
+                      MyTextField(
                         controller: emailController,
+                        label: "Email Address",
+                        icon: Icons.email,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: "Email Address",
-
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(color: Colors.grey),
-                          ),
-
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-
-                          prefixIcon: Icon(Icons.email, color: Colors.black87),
-                        ),
                         validator: validateEmail,
+                      ),
+                      SizedBox(height: 15),
+                      MyTextField(
+                        controller: passwordController,
+                        label: "Password",
+                        icon: Icons.visibility_off,
+                        obscuretext: true,
+                        keyboardType: TextInputType.visiblePassword,
+                        validator: validatePassword,
+                      ),
+                      SizedBox(height: 15),
+                      MyTextField(
+                        controller: confirmPasswordController,
+                        label: "Confirm Password",
+                        icon: Icons.visibility_off,
+                        obscuretext: true,
+                        keyboardType: TextInputType.visiblePassword,
+                        validator: validatePassword,
+                      ),
+
+                      SizedBox(height: 15),
+                      MyTextField(
+                        controller: idController,
+                        label: "Type ID",
+                        icon: Icons.perm_identity,
+                        keyboardType: TextInputType.text,
+                        validator: validateID,
                       ),
                       SizedBox(height: 30),
                       ElevatedButton(
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
-                            register(emailController.text, idController.text);
+                            // Register account
+                            register(
+                              context,
+                              emailController.text,
+                              passwordController.text,
+                              confirmPasswordController.text,
+                            );
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -174,15 +203,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                       ),
                       SizedBox(height: 10),
-                      ElevatedButton(
-                        onPressed: () async {
-                          var userBox = Hive.box("CURRENT_USER");
-                          var user = userBox.get(emailtest);
-
-                          print("[LOG] ${user['email']} & ${user['id']}");
-                        },
-                        child: Text("TEST"),
-                      ),
                     ],
                   ),
                 ),
