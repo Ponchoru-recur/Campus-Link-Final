@@ -13,3 +13,8 @@
 7.Do Not Disturb
 
 8.Polish & Testing
+
+✓ Single checkmark (gray) - Message sent/delivered
+✓✓ Double checkmark (blue) - Seen by all participants
+✓✓ Double checkmark (gray) - Seen by some participants with count (e.g., "Seen by 3/5")
+Helps instructors track student engagement

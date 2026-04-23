@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class MyTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
-  final IconData icon;
+  final IconData? icon;
   final bool obscuretext;
   final TextInputType keyboardType;
   final String? Function(String?)? validator;
@@ -12,7 +12,7 @@ class MyTextField extends StatelessWidget {
     super.key,
     required this.controller,
     required this.label,
-    required this.icon,
+    this.icon,
     this.obscuretext = false,
     this.keyboardType = TextInputType.text,
     this.validator,
@@ -40,7 +40,7 @@ class MyTextField extends StatelessWidget {
           borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
         ),
 
-        prefixIcon: Icon(icon, color: Colors.black87),
+        prefixIcon: icon != null ? Icon(icon, color: Colors.black87) : null,
       ),
     );
   }

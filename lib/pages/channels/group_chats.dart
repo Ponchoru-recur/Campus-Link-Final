@@ -51,16 +51,23 @@ class _ChanncelScreenState extends State<ChanncelScreen> {
     Map<String, dynamic> userData,
     BuildContext context,
   ) {
-    return UserTile(
-      text: userData["email"],
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => Chatpage(receiverEmail: userData['email']),
-          ),
-        );
-      },
-    );
+    if (userData["email"] != _authService.getCurrentUser()?.email) {
+      return UserTile(
+        text: userData["email"],
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => Chatpage(
+                receiverEmail: userData['email'],
+                receiverID: userData['uid'],
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      return Container();
+    }
   }
 }
