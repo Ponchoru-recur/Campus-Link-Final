@@ -51,6 +51,10 @@ class _LoginScreenState extends State<LoginScreen> {
       ).showSnackBar(const SnackBar(content: Text("Logging in...")));
 
       // TODO: connect to Firebase
+
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil('/chatScreen', (route) => false);
     }
   }
 

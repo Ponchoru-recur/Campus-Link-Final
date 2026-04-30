@@ -6,6 +6,20 @@ import 'package:flutter/material.dart';
 // ============================================
 
 class AppColors {
+  // ============================================
+  // SIMPLE COLORS (Direct Use in Widgets)
+  // ============================================
+  static const Color primary = Color(0xFF2DC58C); // teal-green
+  static const Color primaryDark = Color(0xFF1E9E70);
+  static const Color instructorPurple = Color(0xFF7B5EA7);
+  static const Color background = Color(0xFFFFFFFF);
+  static const Color surface = Color(0xFFF5F5F5);
+  static const Color divider = Color(0xFFE0E0E0);
+  static const Color textPrimary = Color(0xFF1A1A1A);
+  static const Color textSecondary = Color(0xFF757575);
+  static const Color unreadBadge = Color(0xFF2DC58C);
+  static const Color drawerHeader = Color(0xFF2DC58C);
+
   // --- PRIMARY COLORS ---
   //
   // Light Mode Primary
@@ -48,7 +62,7 @@ class AppColors {
   static const Color lightSurface = Color(0xFFFAFAFA); // Light background
   static const Color lightSurfaceContainer = Color(
     0xFFFFFFFF,
-  ); // Card background 
+  ); // Card background
 
   static const Color darkSurface = Color(0xFF121212); // Dark background
   static const Color darkSurfaceContainer = Color(

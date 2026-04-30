@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/chats_screen.dart';
 import 'package:luminescence/pages/login/login_screen.dart';
 import 'package:luminescence/pages/role_selection/role_selection_screen.dart';
 import 'package:luminescence/themes/app_theme.dart';
@@ -16,6 +17,7 @@ void main() async {
       routes: {
         '/': (context) => RoleSelectionScreen(),
         '/login': (context) => LoginScreen(),
+        '/chatScreen': (context) => ChatsScreen(),
         // '/register': (context) => RegisterScreen(),
         // '/gmail': (context) => FakeEmail(),
         // '/verified': (context) => VerifiedPageScreen(),
