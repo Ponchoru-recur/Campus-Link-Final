@@ -54,12 +54,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // Goes to Sign up area
   void handleSignup() {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text("Go to Sign Up")));
   }
 
+  // Goes to Help area
   void handleHelp() {
     ScaffoldMessenger.of(
       context,
