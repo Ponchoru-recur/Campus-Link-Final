@@ -5,6 +5,7 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_tile
 import 'package:luminescence/pages/home_hamburger/channel_screen/instructor_chat_tile.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/instructor_chat_screen.dart';
+import 'package:luminescence/pages/home_hamburger/announcement_button/announcement_dialog.dart';
 
 /// The main Chats / Channels screen shown after login.
 /// Contains the navigation drawer and the list of group chats + instructor DMs.
@@ -250,6 +251,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
           ),
         ),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.send_outlined),
+            tooltip: 'Create Announcement',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => AnnouncementDialog(groupChats: _groupChats),
+              );
+            },
+          ),
+        ],
       ),
       drawer: _buildDrawer(),
       body: ListView(
