@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:luminescence/pages/signup/sign_up_screen.dart';
+import 'package:luminescence/pages/reset_password/reset_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -181,6 +182,19 @@ class _LoginScreenState extends State<LoginScreen> {
           tooltip: 'Back to Role Selection',
         ),
         title: null,
+        actions: [
+          TextButton(
+            onPressed: handleHelp,
+            child: const Text(
+              '?',
+              style: TextStyle(
+                color: Colors.green,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -281,6 +295,38 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
+                const SizedBox(height: 10),
+
+                // 🔑 Forgot Password
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ResetPasswordScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      "Forgot Password?",
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                const Text(
+                  "By continuing, you agree to our Terms of Service",
+                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                  textAlign: TextAlign.center,
+                ),
+
                 const SizedBox(height: 20),
 
                 // 🔗 Sign up
@@ -299,28 +345,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ],
-                ),
-
-                const SizedBox(height: 10),
-
-                const Text(
-                  "By continuing, you agree to our Terms of Service",
-                  style: TextStyle(fontSize: 12, color: Colors.black54),
-                  textAlign: TextAlign.center,
-                ),
-
-                const SizedBox(height: 20),
-
-                // 🆘 Help
-                GestureDetector(
-                  onTap: handleHelp,
-                  child: const Text(
-                    "Need help?",
-                    style: TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
                 ),
 
                 const SizedBox(height: 30),
