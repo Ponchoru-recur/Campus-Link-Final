@@ -1,35 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:luminescence/pages/signup/sign_up_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class SignUpScreen extends StatefulWidget {
+  final String role;
+
+  const SignUpScreen({super.key, required this.role});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   final _formKey = GlobalKey<FormState>();
 
   bool _obscurePassword = true;
-  String _role = 'student'; // default
+  bool _obscureConfirmPassword = true;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (args != null && args is String) {
-      setState(() {
-        _role = args;
-      });
-    }
-  }
-
-
-  // 🔍 Email validation (Carsu format)
   String? validateEmail(String? value) {
     if (value == null || value.isEmpty) {
       return "Email is required";
@@ -44,7 +33,6 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
-  // 🔍 Password validation
   String? validatePassword(String? value) {
     if (value == null || value.isEmpty) {
       return "Password is required";
@@ -57,14 +45,35 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
-  void handleLogin() {
+  String? validateConfirmPassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return "Please confirm your password";
+    }
+
+    if (value != _passwordController.text) {
+      return "Passwords do not match";
+    }
+
+    return null;
+  }
+
+  void handleSignUp() {
     if (_formKey.currentState!.validate()) {
-      // ✅ Valid input
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("Logging in...")));
+      ).showSnackBar(SnackBar(
+        content: Text(
+          widget.role == 'faculty'
+              ? "Creating faculty account..."
+              : "Creating account...",
+        ),
+      ));
 
-      // TODO: connect to Firebase
+      // TODO: connect to Firebase with role information
+      // FirebaseAuth.instance.createUserWithEmailAndPassword(
+      //   email: _emailController.text,
+      //   password: _passwordController.text,
+      // );
 
       Navigator.of(
         context,
@@ -72,25 +81,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Goes to Sign up area
-  void handleSignup() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SignUpScreen(role: _role),
-      ),
-    );
-  }
-
-  // Goes to Help area
-  void handleHelp() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Help Center")));
+  void handleLogin() {
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isFaculty = widget.role == 'faculty';
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       body: SafeArea(
@@ -102,23 +100,26 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const SizedBox(height: 60),
 
-                // 🔵 Title
-                const Text(
-                  "Log in",
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                Text(
+                  isFaculty ? "Create Faculty Account" : "Create Account",
+                  style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
 
                 const SizedBox(height: 10),
 
-                const Text(
-                  "Enter your Carsu and press login to securely access your account and manage your services.",
+                Text(
+                  isFaculty
+                      ? "Sign up as faculty to manage classes and communicate with students."
+                      : "Sign up as a student to access courses and connect with peers.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.black54),
+                  style: const TextStyle(color: Colors.black54),
                 ),
 
                 const SizedBox(height: 40),
 
-                // 📧 Email
                 TextFormField(
                   controller: _emailController,
                   validator: validateEmail,
@@ -136,7 +137,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 20),
 
-                // 🔒 Password
                 TextFormField(
                   controller: _passwordController,
                   validator: validatePassword,
@@ -165,35 +165,66 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
+                const SizedBox(height: 20),
+
+                TextFormField(
+                  controller: _confirmPasswordController,
+                  validator: validateConfirmPassword,
+                  obscureText: _obscureConfirmPassword,
+                  decoration: InputDecoration(
+                    hintText: "Confirm Password",
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[200],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(15),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
                 const SizedBox(height: 30),
 
-                // 🟢 Login Button
                 SizedBox(
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: handleLogin,
+                    onPressed: handleSignUp,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15),
                       ),
                     ),
-                    child: const Text("Login", style: TextStyle(fontSize: 16)),
+                    child: Text(
+                      isFaculty ? "Create Faculty Account" : "Create Account",
+                      style: const TextStyle(fontSize: 16),
+                    ),
                   ),
                 ),
 
                 const SizedBox(height: 20),
 
-                // 🔗 Sign up
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Don't have an account? "),
+                    const Text("Already have an account? "),
                     GestureDetector(
-                      onTap: handleSignup,
+                      onTap: handleLogin,
                       child: const Text(
-                        "Sign up here",
+                        "Log in here",
                         style: TextStyle(
                           color: Colors.blue,
                           fontWeight: FontWeight.bold,
@@ -201,28 +232,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ],
-                ),
-
-                const SizedBox(height: 10),
-
-                const Text(
-                  "By continuing, you agree to our Terms of Service",
-                  style: TextStyle(fontSize: 12, color: Colors.black54),
-                  textAlign: TextAlign.center,
-                ),
-
-                const SizedBox(height: 20),
-
-                // 🆘 Help
-                GestureDetector(
-                  onTap: handleHelp,
-                  child: const Text(
-                    "Need help?",
-                    style: TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
                 ),
 
                 const SizedBox(height: 30),

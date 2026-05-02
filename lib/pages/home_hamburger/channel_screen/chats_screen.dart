@@ -118,7 +118,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       backgroundColor: Colors.white.withOpacity(0.3),
                       backgroundImage: const AssetImage(
                           'assets/images/avatar.png'), // Replace with actual image
-                      onBackgroundImageError: (_, __) {},
+                      onBackgroundImageError: (_, _) {},
                       child: const Icon(Icons.person,
                           color: Colors.white, size: 28),
                     ),
