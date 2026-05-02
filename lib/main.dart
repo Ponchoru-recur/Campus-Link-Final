@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chats_screen.dart';
 import 'package:luminescence/pages/login/login_screen.dart';
 import 'package:luminescence/pages/role_selection/role_selection_screen.dart';
+import 'package:luminescence/pages/verify_email/verify_email_screen.dart';
 import 'package:luminescence/themes/app_theme.dart';
 
 void main() async {
@@ -36,19 +37,41 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<User?>(
-      future: Future.value(FirebaseAuth.instance.currentUser),
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        if (snapshot.hasData && snapshot.data != null) {
-          return const ChatsScreen();
+        final user = snapshot.data;
+        if (user == null) {
+          return RoleSelectionScreen();
         }
-        return RoleSelectionScreen();
+        return FutureBuilder<Widget>(
+          future: _resolveUser(user),
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snap.hasData) {
+              return snap.data!;
+            }
+            return RoleSelectionScreen();
+          },
+        );
       },
     );
+  }
+
+  Future<Widget> _resolveUser(User user) async {
+    await user.reload();
+    if (user.emailVerified) {
+      return const ChatsScreen();
+    }
+    return VerifyEmailScreen(email: user.email, role: null);
   }
 }

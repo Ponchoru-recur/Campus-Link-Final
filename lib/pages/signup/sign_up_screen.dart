@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:luminescence/pages/verify_email/verify_email_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   final String role;
@@ -73,20 +73,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
         final user = credential.user;
         if (user != null) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .set({
-                'email': _emailController.text.trim(),
-                'role': widget.role,
-                'createdAt': FieldValue.serverTimestamp(),
-              });
+          await user.sendEmailVerification();
         }
 
         if (mounted) {
-          Navigator.of(
-            context,
-          ).pushNamedAndRemoveUntil('/chatScreen', (route) => false);
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => VerifyEmailScreen(
+                email: _emailController.text.trim(),
+                role: widget.role,
+              ),
+            ),
+          );
         }
       } on FirebaseAuthException catch (e) {
         String message = 'Sign up failed';
