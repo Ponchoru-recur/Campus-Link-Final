@@ -28,7 +28,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-
   // 🔍 Email validation (Carsu format)
   String? validateEmail(String? value) {
     if (value == null || value.isEmpty) {
@@ -76,17 +75,62 @@ class _LoginScreenState extends State<LoginScreen> {
   void handleSignup() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => SignUpScreen(role: _role),
-      ),
+      MaterialPageRoute(builder: (context) => SignUpScreen(role: _role)),
     );
   }
 
   // Goes to Help area
   void handleHelp() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Help Center")));
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Login Help'),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Email Format:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text('• Use: FirstName.LastName@carsu.edu.ph'),
+              Text('• Example: Juan.DelaCruz@carsu.edu.ph'),
+              SizedBox(height: 12),
+              Text(
+                'Password Requirements:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text('• At least 6 characters long'),
+              SizedBox(height: 12),
+              Text(
+                'Don\'t have an account?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text('• Tap "Sign up here" below the login button'),
+              SizedBox(height: 12),
+              Text(
+                'Forgot Password?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text('• Use the "Forgot Password?" link on login screen'),
+              SizedBox(height: 12),
+              Text(
+                'Need more help?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text('• Contact IT Support: support@carsu.edu.ph'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
