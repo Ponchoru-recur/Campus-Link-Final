@@ -32,9 +32,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   Future<void> _initialize() async {
     try {
-      if (widget.email != null && widget.role != null) {
+      if (widget.email != null) {
         _email = widget.email!;
-        _role = widget.role!;
+        if (widget.role != null) {
+          _role = widget.role!;
+        } else {
+          final prefs = await SharedPreferences.getInstance();
+          _role = prefs.getString('pending_role') ?? 'student';
+        }
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('pending_email', _email);
         await prefs.setString('pending_role', _role);

@@ -6,7 +6,7 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_tile
 import 'package:luminescence/pages/home_hamburger/channel_screen/instructor_chat_tile.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/instructor_chat_screen.dart';
-import 'package:luminescence/pages/home_hamburger/announcement_button/announcement_dialog.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/announcement_button/announcement_dialog.dart';
 
 /// The main Chats / Channels screen shown after login.
 /// Contains the navigation drawer and the list of group chats + instructor DMs.

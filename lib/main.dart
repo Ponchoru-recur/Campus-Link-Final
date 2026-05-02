@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chats_screen.dart';
 import 'package:luminescence/pages/login/login_screen.dart';
 import 'package:luminescence/pages/role_selection/role_selection_screen.dart';
@@ -72,6 +73,9 @@ class AuthWrapper extends StatelessWidget {
     if (user.emailVerified) {
       return const ChatsScreen();
     }
-    return VerifyEmailScreen(email: user.email, role: null);
+    // Load role from SharedPreferences for unverified users
+    final prefs = await SharedPreferences.getInstance();
+    final role = prefs.getString('pending_role') ?? 'student';
+    return VerifyEmailScreen(email: user.email, role: role);
   }
 }

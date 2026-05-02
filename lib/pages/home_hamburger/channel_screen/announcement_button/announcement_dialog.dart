@@ -60,8 +60,9 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
       final user = FirebaseAuth.instance.currentUser;
       final senderId = user?.uid ?? 'unknown';
       final senderName = user?.displayName ?? 'Admin';
-      final priorityStr =
-          _priority == AnnouncementPriority.urgent ? 'urgent' : 'standard';
+      final priorityStr = _priority == AnnouncementPriority.urgent
+          ? 'urgent'
+          : 'standard';
 
       final announcementRef = await FirebaseFirestore.instance
           .collection('announcements')
@@ -95,12 +96,11 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
           'announcementId': announcementRef.id,
         });
 
-        final membersSnap =
-            await FirebaseFirestore.instance
-                .collection('groupChats')
-                .doc(groupId)
-                .collection('members')
-                .get();
+        final membersSnap = await FirebaseFirestore.instance
+            .collection('groupChats')
+            .doc(groupId)
+            .collection('members')
+            .get();
 
         for (final memberDoc in membersSnap.docs) {
           final userId = memberDoc.id;
@@ -192,10 +192,9 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
                       icon: Icons.info_outline,
                       color: AppColors.standardBlue,
                       selected: !isUrgent,
-                      onTap:
-                          () => setState(
-                            () => _priority = AnnouncementPriority.standard,
-                          ),
+                      onTap: () => setState(
+                        () => _priority = AnnouncementPriority.standard,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -205,10 +204,9 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
                       icon: Icons.priority_high,
                       color: AppColors.urgentRed,
                       selected: isUrgent,
-                      onTap:
-                          () => setState(
-                            () => _priority = AnnouncementPriority.urgent,
-                          ),
+                      onTap: () => setState(
+                        () => _priority = AnnouncementPriority.urgent,
+                      ),
                     ),
                   ),
                 ],
@@ -222,10 +220,7 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
                 children: [
                   const Text(
                     'Select Groups',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                   ),
                   TextButton(
                     onPressed: _toggleSelectAll,
@@ -266,9 +261,7 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
                         style: const TextStyle(fontSize: 14),
                       ),
                       controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                     );
                   },
                 ),
@@ -288,17 +281,16 @@ class _AnnouncementDialogState extends State<AnnouncementDialog> {
             backgroundColor: isUrgent ? AppColors.urgentRed : AppColors.primary,
             foregroundColor: Colors.white,
           ),
-          child:
-              _isSubmitting
-                  ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                  : const Text('Announce'),
+          child: _isSubmitting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Announce'),
         ),
       ],
     );
@@ -337,7 +329,11 @@ class _PriorityChip extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 16, color: selected ? color : AppColors.textSecondary),
+            Icon(
+              icon,
+              size: 16,
+              color: selected ? color : AppColors.textSecondary,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
