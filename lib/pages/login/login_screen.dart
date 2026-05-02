@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:luminescence/pages/signup/sign_up_screen.dart';
 
@@ -16,6 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
   String _role = 'student'; // default
+  bool _isLoading = false;
 
   @override
   void didChangeDependencies() {
@@ -56,18 +58,46 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
-  void handleLogin() {
+  void handleLogin() async {
     if (_formKey.currentState!.validate()) {
-      // ✅ Valid input
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Logging in...")));
+      setState(() => _isLoading = true);
 
-      // TODO: connect to Firebase
+      try {
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
 
-      Navigator.of(
-        context,
-      ).pushNamedAndRemoveUntil('/chatScreen', (route) => false);
+        if (mounted) {
+          Navigator.of(
+            context,
+          ).pushNamedAndRemoveUntil('/chatScreen', (route) => false);
+        }
+      } on FirebaseAuthException catch (e) {
+        String message = 'Login failed';
+        if (e.code == 'user-not-found') {
+          message = 'No account found for this email';
+        } else if (e.code == 'wrong-password') {
+          message = 'Incorrect password';
+        } else if (e.code == 'invalid-email') {
+          message = 'Invalid email format';
+        } else if (e.code == 'invalid-credential') {
+          message = 'Invalid email or password';
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(message)));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -216,14 +246,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: handleLogin,
+                    onPressed: _isLoading ? null : handleLogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15),
                       ),
                     ),
-                    child: const Text("Login", style: TextStyle(fontSize: 16)),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text("Login", style: TextStyle(fontSize: 16)),
                   ),
                 ),
 

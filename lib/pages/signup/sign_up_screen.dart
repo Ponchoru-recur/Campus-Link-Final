@@ -1,3 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -18,6 +20,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
 
   String? validateEmail(String? value) {
     if (value == null || value.isEmpty) {
@@ -57,27 +60,57 @@ class _SignUpScreenState extends State<SignUpScreen> {
     return null;
   }
 
-  void handleSignUp() {
+  void handleSignUp() async {
     if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(
-        content: Text(
-          widget.role == 'faculty'
-              ? "Creating faculty account..."
-              : "Creating account...",
-        ),
-      ));
+      setState(() => _isLoading = true);
 
-      // TODO: connect to Firebase with role information
-      // FirebaseAuth.instance.createUserWithEmailAndPassword(
-      //   email: _emailController.text,
-      //   password: _passwordController.text,
-      // );
+      try {
+        final credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+            );
 
-      Navigator.of(
-        context,
-      ).pushNamedAndRemoveUntil('/chatScreen', (route) => false);
+        final user = credential.user;
+        if (user != null) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+                'email': _emailController.text.trim(),
+                'role': widget.role,
+                'createdAt': FieldValue.serverTimestamp(),
+              });
+        }
+
+        if (mounted) {
+          Navigator.of(
+            context,
+          ).pushNamedAndRemoveUntil('/chatScreen', (route) => false);
+        }
+      } on FirebaseAuthException catch (e) {
+        String message = 'Sign up failed';
+        if (e.code == 'weak-password') {
+          message = 'Password is too weak';
+        } else if (e.code == 'email-already-in-use') {
+          message = 'An account already exists for this email';
+        } else if (e.code == 'invalid-email') {
+          message = 'Invalid email format';
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(message)));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -201,17 +234,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: handleSignUp,
+                    onPressed: _isLoading ? null : handleSignUp,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15),
                       ),
                     ),
-                    child: Text(
-                      isFaculty ? "Create Faculty Account" : "Create Account",
-                      style: const TextStyle(fontSize: 16),
-                    ),
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                isFaculty
+                                    ? "Create Faculty Account"
+                                    : "Create Account",
+                                style: const TextStyle(fontSize: 16),
+                              ),
                   ),
                 ),
 

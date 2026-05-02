@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chat_item.dart';
 import 'package:luminescence/themes/app_colors.dart';
@@ -219,9 +220,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 _DrawerItem(
                   icon: Icons.logout,
                   label: 'Log out',
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
-                    // TODO: handle logout
+                    await FirebaseAuth.instance.signOut();
+                    if (context.mounted) {
+                      Navigator.of(context).pushNamedAndRemoveUntil(
+                        '/roleSelection',
+                        (route) => false,
+                      );
+                    }
                   },
                 ),
               ],
