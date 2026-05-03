@@ -93,6 +93,18 @@ Assets located in `assets/images/` (per `pubspec.yaml`). App uses `assets/images
 - Role checks: `widget.role == 'faculty'` for conditional UI
 - **`withValues(alpha:)`** preferred over deprecated `withOpacity()` (some files still use `withOpacity` - see analyzer warnings)
 
+## Role-Based Access Control
+
+**Faculty Privileges:**
+- Only faculty can create group chats - Create button conditionally shown via `_userRole == 'faculty'` check in `chats_screen.dart:28`
+- Faculty are automatically admins in all group chats they're members of - checked via `isFaculty` flag in `group_chat_screen.dart:132-134`, not just group creator
+- Only admins (faculty or group creator) can add/remove members and rename groups
+
+**Role Badge UI:**
+- Drawer header shows user role as a soft, rounded tag next to their name (`chats_screen.dart:258-300`)
+- Badge uses semi-transparent white background (`withValues(alpha: 0.25)`) with subtle border
+- Displays capitalized role: "Student" or "Faculty"
+
 ## Key Dependencies
 
 `firebase_core`, `firebase_auth`, `cloud_firestore`, `shared_preferences`, `flutter_spinkit`, `app_links`, `url_launcher`, `intl`, `hive_ce`, `hive_ce_flutter` (not yet initialized), `android_intent_plus`, `http`, `logging`, `cupertino_icons`

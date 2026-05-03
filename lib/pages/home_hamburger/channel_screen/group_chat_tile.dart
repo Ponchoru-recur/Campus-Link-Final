@@ -7,17 +7,22 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/chat_avatars.da
 class GroupChatTile extends StatelessWidget {
   final ChatItem chat;
   final VoidCallback onTap;
+  final bool isFaculty;
+  final VoidCallback? onDelete;
 
   const GroupChatTile({
     super.key,
     required this.chat,
     required this.onTap,
+    this.isFaculty = false,
+    this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      onLongPress: isFaculty ? () => _showPopupMenu(context) : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
@@ -82,6 +87,29 @@ class GroupChatTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showPopupMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (bottomSheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: Icon(Icons.delete, color: AppColors.urgentRed),
+            title: Text(
+              'Delete',
+              style: TextStyle(color: AppColors.urgentRed),
+            ),
+            onTap: () {
+              Navigator.pop(bottomSheetContext);
+              onDelete?.call();
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

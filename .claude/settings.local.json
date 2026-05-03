@@ -14,7 +14,8 @@
       "Bash(Get-Content \"C:\\\\Users\\\\Sam\\\\Desktop\\\\Knowledge Folder\\\\Flutter Shenanigans\\\\Final\\\\luminescence\\\\lib\\\\pages\\\\home_hamburger\\\\channel_screen\\\\group_chat_screen.dart\")",
       "Bash(Select-String -Pattern \"fromLTRB\" -Context 0,2)",
       "Bash(Select-Object -First 20)",
-      "PowerShell(flutter pub *)"
+      "PowerShell(flutter pub *)",
+      "Bash(Select-String -Pattern \"chats_screen.dart\")"
     ]
   }
 }

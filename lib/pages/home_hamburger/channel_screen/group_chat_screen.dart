@@ -30,65 +30,58 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   StreamSubscription<QuerySnapshot>? _messagesSubscription;
   StreamSubscription<DocumentSnapshot>? _groupDocSubscription;
 
-  // Sample messages — replace with real data source later
-  final List<Message> _messages = [
-    Message(
-      id: '1',
-      senderId: 'user2',
-      senderName: 'Maria',
-      text: 'Hey everyone, did you finish the assignment?',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 30)),
-      isMe: false,
-    ),
-    Message(
-      id: '2',
-      senderId: 'user3',
-      senderName: 'Juan',
-      text: 'Almost done, just need to fix one bug.',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 25)),
-      isMe: false,
-    ),
-    Message(
-      id: '3',
-      senderId: 'me',
-      senderName: 'Me',
-      text: 'I submitted mine already! 🎉',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 20)),
-      isMe: true,
-    ),
-    Message(
-      id: '4',
-      senderId: 'user2',
-      senderName: 'Maria',
-      text: 'Nice! What time is the deadline again?',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 10)),
-      isMe: false,
-    ),
-  ];
+  // Messages loaded from Firestore stream
+  final List<Message> _messages = [];
 
-  void _sendMessage() {
+  void _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-    setState(() {
-      _messages.add(Message(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        senderId: 'me',
-        senderName: 'Me',
-        text: text,
-        timestamp: DateTime.now(),
-        isMe: true,
-      ));
-    });
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final email = user.email ?? '';
+    final senderName = email.isEmpty
+        ? 'Me'
+        : email
+            .split('@')
+            .first
+            .replaceAll('.', ' ')
+            .split(' ')
+            .map((p) => p.isEmpty ? p : p[0].toUpperCase() + p.substring(1))
+            .join(' ');
+
     _controller.clear();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final messagesRef = firestore
+          .collection('group_chats')
+          .doc(widget.chat.id)
+          .collection('messages');
+
+      // Add message to Firestore
+      await messagesRef.add({
+        'senderId': user.uid,
+        'senderName': senderName,
+        'text': text,
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'text',
+        'readBy': [user.uid],
+      });
+
+      // Update group chat's lastMessage and time
+      await firestore.collection('group_chats').doc(widget.chat.id).update({
+        'lastMessage': text,
+        'time': 'Now',
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send message: $e')),
         );
       }
-    });
+    }
   }
 
   String _formatTime(DateTime dt) {
@@ -97,14 +90,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final ampm = dt.hour >= 12 ? 'PM' : 'AM';
     return '$h:$m $ampm';
   }
-
-  // Sample members — replace with real data later
-  final List<Map<String, String>> _members = const [
-    {'name': 'You', 'role': 'Admin'},
-    {'name': 'Maria Santos', 'role': 'Member'},
-    {'name': 'Juan Dela Cruz', 'role': 'Member'},
-    {'name': 'Ana Reyes', 'role': 'Member'},
-  ];
 
   @override
   void initState() {
@@ -120,13 +105,19 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
-      final doc = await FirebaseFirestore.instance
+      final groupDoc = await FirebaseFirestore.instance
           .collection('group_chats')
           .doc(widget.chat.id)
           .get();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       if (!mounted) return;
+      final isCreator = groupDoc.data()?['createdBy'] == user.uid;
+      final isFaculty = userDoc.data()?['role'] == 'faculty';
       setState(() {
-        _isAdmin = doc.data()?['createdBy'] == user.uid;
+        _isAdmin = isCreator || isFaculty;
       });
     } catch (e) {
       debugPrint('Error checking admin status: $e');
@@ -186,14 +177,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   Future<void> _loadMembers() async {
     try {
-      final doc = await FirebaseFirestore.instance
+      final groupDoc = await FirebaseFirestore.instance
           .collection('group_chats')
           .doc(widget.chat.id)
           .get();
       if (!mounted) return;
-      final data = doc.data();
-      if (data == null) return;
-      final members = List<String>.from(data['members'] ?? []);
+      final groupData = groupDoc.data();
+      if (groupData == null) return;
+      final members = List<String>.from(groupData['members'] ?? []);
       final userDocs = await Future.wait(
         members.map((uid) => FirebaseFirestore.instance.collection('users').doc(uid).get()),
       );
@@ -201,11 +192,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       setState(() {
         _firestoreMembers = userDocs.map((doc) {
           final data = doc.data();
+          final isCreator = doc.id == groupData['createdBy'];
+          final isFaculty = data?['role'] == 'faculty';
           return {
             'uid': doc.id,
             'name': data?['email']?.split('@').first.replaceAll('.', ' ').split(' ').map((p) => p.isEmpty ? p : p[0].toUpperCase() + p.substring(1)).join(' ') ?? 'Unknown',
             'email': data?['email'] ?? '',
-            'role': doc.id == data?['createdBy'] ? 'Admin' : 'Member',
+            'role': (isCreator || isFaculty) ? 'Admin' : 'Member',
           };
         }).toList();
       });

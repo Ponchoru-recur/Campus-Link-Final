@@ -25,6 +25,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
   List<ChatItem> _groupChats = [];
   bool _isCreatingGroup = false;
   StreamSubscription<QuerySnapshot>? _groupChatsSubscription;
+  String _userRole = 'student';
+  bool _isDisposed = false;
 
   String get _userEmail => FirebaseAuth.instance.currentUser?.email ?? '';
 
@@ -42,11 +44,38 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void initState() {
     super.initState();
     _setupGroupChatsStream();
+    _fetchUserRole();
+  }
+
+  void _fetchUserRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || _isDisposed) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (_isDisposed) return;
+      final role = doc.exists ? (doc['role'] ?? 'student') : 'student';
+      if (mounted && !_isDisposed) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_isDisposed) {
+            setState(() {
+              _userRole = role;
+            });
+          }
+        });
+      }
+    } catch (e) {
+      if (!_isDisposed) {
+        debugPrint('Error fetching user role: $e');
+      }
+    }
   }
 
   void _setupGroupChatsStream() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null || _isDisposed) return;
 
     _groupChatsSubscription = FirebaseFirestore.instance
         .collection('group_chats')
@@ -54,7 +83,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         .snapshots()
         .listen(
       (snapshot) {
-        if (!mounted) return;
+        if (_isDisposed || !mounted) return;
         setState(() {
           _groupChats = snapshot.docs.map((doc) {
             return ChatItem(
@@ -68,13 +97,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
         });
       },
       onError: (e) {
-        debugPrint('Error in group chats stream: $e');
+        if (!_isDisposed) {
+          debugPrint('Error in group chats stream: $e');
+        }
       },
     );
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     _groupChatsSubscription?.cancel();
     super.dispose();
   }
@@ -109,6 +141,107 @@ class _ChatsScreenState extends State<ChatsScreen> {
       context,
       MaterialPageRoute(builder: (_) => InstructorChatScreen(chat: chat)),
     );
+  }
+
+  Future<void> _confirmAndDeleteGroupChat(ChatItem chat) async {
+    final bool? firstConfirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Group Chat'),
+        content: Text('Are you sure you want to delete "${chat.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: AppColors.urgentRed),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (firstConfirm != true) return;
+    if (!mounted) return;
+
+    final bool? secondConfirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirm Deletion'),
+        content: const Text(
+          'This action is permanent and cannot be undone. '
+          'All messages in this group chat will also be deleted. '
+          'Are you really sure?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Yes, Delete Permanently',
+              style: TextStyle(color: AppColors.urgentRed),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (secondConfirm == true) {
+      await _deleteGroupChat(chat);
+    }
+  }
+
+  Future<void> _deleteGroupChat(ChatItem chat) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final groupChatRef = firestore.collection('group_chats').doc(chat.id);
+
+      // Delete all messages in the subcollection
+      final messagesSnapshot = await groupChatRef.collection('messages').get();
+
+      // Process in batches of 500 (Firestore batch limit)
+      const batchLimit = 500;
+      for (int i = 0; i < messagesSnapshot.docs.length; i += batchLimit) {
+        final batch = firestore.batch();
+        final end = (i + batchLimit < messagesSnapshot.docs.length)
+            ? i + batchLimit
+            : messagesSnapshot.docs.length;
+
+        for (int j = i; j < end; j++) {
+          batch.delete(messagesSnapshot.docs[j].reference);
+        }
+
+        await batch.commit();
+      }
+
+      // Delete the group chat document
+      await groupChatRef.delete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${chat.name} has been deleted'),
+            backgroundColor: AppColors.successGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete group chat: $e'),
+            backgroundColor: AppColors.urgentRed,
+          ),
+        );
+      }
+    }
   }
 
   void _onCreateGroupChat() {
@@ -235,13 +368,42 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                Text(
-                  _userName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      _userName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Text(
+                        _userRole[0].toUpperCase() + _userRole.substring(1),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 Text(
                   _userEmail,
@@ -380,12 +542,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
             (chat) => GroupChatTile(
               chat: chat,
               onTap: () => _openGroupChat(chat),
+              isFaculty: _userRole == 'faculty',
+              onDelete: () => _confirmAndDeleteGroupChat(chat),
             ),
           ),
           // ── Divider ──
           const Divider(height: 1, color: AppColors.divider),
-          // ── Create Group Chat Button ──
-          CreateGroupChatButton(onTap: _onCreateGroupChat),
+          // ── Create Group Chat Button (Faculty only) ──
+          if (_userRole == 'faculty') CreateGroupChatButton(onTap: _onCreateGroupChat),
           // ── Instructor DMs ──
           ..._instructorChats.map(
             (chat) => InstructorChatTile(
