@@ -7,6 +7,7 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/instructor_chat
 import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/instructor_chat_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/announcement_button/announcement_dialog.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/create_group_chat_button.dart';
 
 /// The main Chats / Channels screen shown after login.
 /// Contains the navigation drawer and the list of group chats + instructor DMs.
@@ -19,7 +20,7 @@ class ChatsScreen extends StatefulWidget {
 
 class _ChatsScreenState extends State<ChatsScreen> {
   // ── Sample Data ── Replace with real data source / API calls later
-  final List<ChatItem> _groupChats = const [
+  final _groupChats = <ChatItem>[
     ChatItem(
       id: 'g1',
       name: 'ITE16 - NO1',
@@ -95,6 +96,54 @@ class _ChatsScreenState extends State<ChatsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => InstructorChatScreen(chat: chat)),
+    );
+  }
+
+  void _onCreateGroupChat() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create New Group Chat'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Group name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                setState(() {
+                  _groupChats.add(
+                    ChatItem(
+                      id: 'g${DateTime.now().millisecondsSinceEpoch}',
+                      name: name,
+                      lastMessage: '',
+                      time: 'Now',
+                      type: ChatType.groupChat,
+                    ),
+                  );
+                });
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -283,6 +332,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
           ),
           // ── Divider ──
           const Divider(height: 1, color: AppColors.divider),
+          // ── Create Group Chat Button ──
+          CreateGroupChatButton(onTap: _onCreateGroupChat),
           // ── Instructor DMs ──
           ..._instructorChats.map(
             (chat) => InstructorChatTile(

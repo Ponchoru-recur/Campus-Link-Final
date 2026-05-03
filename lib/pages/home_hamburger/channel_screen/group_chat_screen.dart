@@ -87,6 +87,131 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     return '$h:$m $ampm';
   }
 
+  // Sample members — replace with real data later
+  final List<Map<String, String>> _members = const [
+    {'name': 'You', 'role': 'Admin'},
+    {'name': 'Maria Santos', 'role': 'Member'},
+    {'name': 'Juan Dela Cruz', 'role': 'Member'},
+    {'name': 'Ana Reyes', 'role': 'Member'},
+  ];
+
+  void _showGroupInfo() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle bar
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Group name
+            Text(
+              widget.chat.name,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Group Chat',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 20),
+            // Members header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Members (${_members.length})',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    // TODO: Add member functionality
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Add member coming soon!'),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.person_add, size: 18),
+                  label: const Text('Add Member'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 1),
+            // Members list
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _members.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final member = _members[index];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                      child: Text(
+                        member['name']![0],
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.primaryDark,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      member['name']!,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    subtitle: Text(
+                      member['role']!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -130,9 +255,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
-            onPressed: () {
-              // TODO: show group info
-            },
+            onPressed: _showGroupInfo,
           ),
         ],
       ),
