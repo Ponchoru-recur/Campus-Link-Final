@@ -44,6 +44,7 @@ flutter build ios
 
 **Navigation:**
 - `RoleSelectionScreen` → `LoginScreen` (role via route args) → `SignUpScreen` (role via constructor) → `VerifyEmailScreen` → `ChatsScreen`
+- `LoginScreen` has links to `SignUpScreen` and `ResetPasswordScreen`
 - `SignUpScreen` uses `MaterialPageRoute` (not named route) for navigation to `VerifyEmailScreen`
 - After auth, screens use `pushNamedAndRemoveUntil(route, (route) => false)` to clear the navigation stack
 
@@ -53,6 +54,26 @@ Routes in `lib/main.dart`:
 - `/chatScreen` - ChatsScreen
 
 **Note:** `themeMode` is hardcoded to `ThemeMode.light` in `main.dart` - dark mode themes exist but are not user-selectable.
+
+### Firebase Integration Status
+
+Firebase is partially integrated:
+- **Firebase Auth**: Fully implemented (login, signup, email verification, password reset)
+- **Cloud Firestore**: Not yet implemented - TODO markers in ChatsScreen, GroupChatScreen, InstructorChatScreen
+- **Expected collections** (not yet created):
+  - `users` - User profiles (save on email verification)
+  - `chats` - Chat/conversation metadata
+  - `messages` - Chat messages
+  - `announcements` - Announcement data
+
+### Chat Interface
+
+`ChatsScreen` (`lib/pages/home_hamburger/channel_screen/chats_screen.dart`):
+- Currently uses sample data - replace with Firestore data
+- Contains drawer with navigation items (Profile, Channels, Updates & Tasks, Announcements, Settings, Policies, Share, Log out)
+- Most drawer items are placeholders with TODO comments
+- Has "Create Announcement" action (available to faculty)
+- Uses `GroupChatTile` and `InstructorChatTile` widgets for list items
 
 ### Key Directories
 
@@ -65,6 +86,7 @@ Routes in `lib/main.dart`:
   - `role_selection/` - Role selection with staggered animations (3 AnimationControllers)
   - `login/` - Login with CarSU email validation + Firebase auth
   - `signup/` - SignUpScreen with Firebase auth + email verification trigger
+  - `reset_password/` - Password reset via Firebase email
   - `verify_email/` - Email verification screen with 10-min timer, polling, cancel/retry
   - `home_hamburger/channel_screen/` - Main chat interface
     - `chats_screen.dart` - Channel list with drawer (logout now functional via `FirebaseAuth.instance.signOut()`)
@@ -72,12 +94,9 @@ Routes in `lib/main.dart`:
     - `instructor_chat_screen.dart` - Instructor DM conversation view
     - `chat_item.dart` - ChatItem model with ChatType enum
     - `message.dart` - Message model for chat conversations
+    - `group_chat_tile.dart` / `instructor_chat_tile.dart` - Chat list tile widgets
+    - `chat_avatars.dart` - Avatar utilities
     - `announcement_button/` - Announcement dialog (create announcements, select groups, set priority)
-
-### Data Models
-
-- **`ChatItem`** (`lib/pages/home_hamburger/channel_screen/chat_item.dart`) - Chat entry with `ChatType` enum (groupChat, instructor)
-- **`Message`** (`lib/pages/home_hamburger/channel_screen/message.dart`) - Single chat message with sender info, text, timestamp, isMe flag
 
 ### State Management
 
@@ -121,6 +140,7 @@ New accounts require email verification via Firebase (`VerifyEmailScreen`):
 ## Known Issues
 
 - **No tests exist** - test directory is empty, no `test/` files created yet
-- **Hardcoded colors** - Several screens (`login_screen.dart`, `sign_up_screen.dart`, `verify_email_screen.dart`) use `Colors.grey[100]`, `Colors.green`, `Colors.blue` instead of `AppColors`
+- **Hardcoded colors** - Several screens (`login_screen.dart`, `sign_up_screen.dart`, `verify_email_screen.dart`, `reset_password_screen.dart`) use `Colors.grey[100]`, `Colors.green`, `Colors.blue` instead of `AppColors`
 - **Dark mode not functional** - Themes defined in `themes/` but `ThemeMode.light` is hardcoded in `main.dart`
-- **TODO comments** mark Firebase integration points in ChatsScreen, GroupChatScreen, InstructorChatScreen, and drawer navigation items
+- **Firestore integration incomplete** - ChatsScreen, GroupChatScreen, InstructorChatScreen use sample data; TODO comments mark Firebase integration points
+- **Drawer navigation placeholders** - Most drawer items in ChatsScreen navigate to nothing (TODO comments)
