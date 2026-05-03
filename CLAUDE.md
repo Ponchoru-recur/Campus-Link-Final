@@ -4,143 +4,111 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Luminescence** (app name: "Campus Link") is a Flutter application for campus communication at Caraga State University (CarSU). It provides role-based access (Student/Faculty) with chat functionality, including group chats and instructor direct messages.
+**Luminescence** (app name: "Campus Link") is a Flutter app for campus communication at Caraga State University. Role-based access (Student/Faculty) with group chats and instructor DMs.
 
 ## Development Commands
 
 ```bash
-# Install dependencies
 flutter pub get
-
-# Run the app (configure platform as needed)
 flutter run
-
-# Run tests
 flutter test
-
-# Run a single test file
 flutter test test/widget_test.dart
-
-# Analyze code
 flutter analyze
-
-# Build for Android
 flutter build apk
-
-# Build for iOS
-flutter build ios
 ```
 
 ## Architecture
 
 ### Auth Flow
-`AuthWrapper` (`lib/main.dart`) is the home widget. It uses `StreamBuilder` with `FirebaseAuth.instance.authStateChanges()` to react to auth state changes in real-time.
+`AuthWrapper` (`lib/main.dart`) uses `StreamBuilder` + `FirebaseAuth.instance.authStateChanges()`.
 
-**Flow:**
-1. No Firebase user → `RoleSelectionScreen`
-2. User exists → `_resolveUser()` reloads user and checks `emailVerified`:
-   - Verified → `ChatsScreen`
-   - Unverified → `VerifyEmailScreen` (role loaded from SharedPreferences `pending_role`)
+**Flow:** No user → `RoleSelectionScreen` → `LoginScreen` (role via route args) → `SignUpScreen` → `VerifyEmailScreen` → `ChatsScreen`
 
-**Navigation:**
-- `RoleSelectionScreen` → `LoginScreen` (role via route args) → `SignUpScreen` (role via constructor) → `VerifyEmailScreen` → `ChatsScreen`
-- `LoginScreen` has links to `SignUpScreen` and `ResetPasswordScreen`
-- `SignUpScreen` uses `MaterialPageRoute` (not named route) for navigation to `VerifyEmailScreen`
-- After auth, screens use `pushNamedAndRemoveUntil(route, (route) => false)` to clear the navigation stack
+Routes (`lib/main.dart`):
+- `/roleSelection` → `RoleSelectionScreen`
+- `/login` → `LoginScreen` (receives role via `ModalRoute.settings.arguments`)
+- `/chatScreen` → `ChatsScreen`
 
-Routes in `lib/main.dart`:
-- `/roleSelection` - RoleSelectionScreen
-- `/login` - LoginScreen (receives role as route arguments)
-- `/chatScreen` - ChatsScreen
+Note: `themeMode` is hardcoded to `ThemeMode.light` in `main.dart:25`.
 
-**Note:** `themeMode` is hardcoded to `ThemeMode.light` in `main.dart` - dark mode themes exist but are not user-selectable.
+### Firebase Integration
 
-### Firebase Integration Status
+**Firestore Structure:**
+```
+users/{uid}: email, role, createdAt, emailVerified
+group_chats/{chatId}: name, members[], createdBy, lastMessage, time, unreadCount, createdAt
+group_chats/{chatId}/messages/{messageId}: senderId, senderName, text, timestamp, type(optional)
+```
 
-Firebase is partially integrated:
-- **Firebase Auth**: Fully implemented (login, signup, email verification, password reset)
-- **Cloud Firestore**: Not yet implemented - TODO markers in ChatsScreen, GroupChatScreen, InstructorChatScreen
-- **Expected collections** (not yet created):
-  - `users` - User profiles (save on email verification)
-  - `chats` - Chat/conversation metadata
-  - `messages` - Chat messages
-  - `announcements` - Announcement data
+**Key:** Group chats queried with `where('members', arrayContains: user.uid)` in `chats_screen.dart:51-54`.
 
-### Chat Interface
+### Data Models
 
-`ChatsScreen` (`lib/pages/home_hamburger/channel_screen/chats_screen.dart`):
-- Currently uses sample data - replace with Firestore data
-- Contains drawer with navigation items (Profile, Channels, Updates & Tasks, Announcements, Settings, Policies, Share, Log out)
-- Most drawer items are placeholders with TODO comments
-- Has "Create Announcement" action (available to faculty)
-- Uses `GroupChatTile` and `InstructorChatTile` widgets for list items
+**ChatItem** (`lib/pages/home_hamburger/channel_screen/chat_item.dart`):
+```dart
+class ChatItem {
+  final String id;
+  final String name;
+  final String lastMessage;
+  final String time;
+  final ChatType type;
+  final int unreadCount;
+  final bool isOnline;
+}
 
-### Key Directories
+enum ChatType { groupChat, instructor }
+```
 
-- **`lib/main.dart`** - Entry point; `AuthWrapper` handles auth state routing
-- **`lib/themes/`** - Material 3 theme system with light/dark mode support
-  - `app_colors.dart` - Shared color palette (primary: teal-green #2DC58C)
-  - `light_mode.dart` / `dark_mode.dart` - Complete ThemeData definitions
-  - `app_theme.dart` - Barrel export file
-- **`lib/pages/`** - Screen widgets organized by feature
-  - `role_selection/` - Role selection with staggered animations (3 AnimationControllers)
-  - `login/` - Login with CarSU email validation + Firebase auth
-  - `signup/` - SignUpScreen with Firebase auth + email verification trigger
-  - `reset_password/` - Password reset via Firebase email
-  - `verify_email/` - Email verification screen with 10-min timer, polling, cancel/retry
-  - `home_hamburger/channel_screen/` - Main chat interface
-    - `chats_screen.dart` - Channel list with drawer (logout now functional via `FirebaseAuth.instance.signOut()`)
-    - `group_chat_screen.dart` - Group chat conversation view
-    - `instructor_chat_screen.dart` - Instructor DM conversation view
-    - `chat_item.dart` - ChatItem model with ChatType enum
-    - `message.dart` - Message model for chat conversations
-    - `group_chat_tile.dart` / `instructor_chat_tile.dart` - Chat list tile widgets
-    - `chat_avatars.dart` - Avatar utilities
-    - `announcement_button/` - Announcement dialog (create announcements, select groups, set priority)
+### Key Files
+
+- **`lib/main.dart`** - Entry point, AuthWrapper, routes, theme setup
+- **`lib/themes/`** - Material 3 themes
+  - `app_theme.dart` - Barrel file exporting all theme files
+  - `app_colors.dart` - Shared color palette
+  - `light_mode.dart` / `dark_mode.dart` - Theme definitions
+- **`lib/pages/home_hamburger/channel_screen/`** - Main chat feature
+  - `chats_screen.dart` - Channel list with drawer (logout functional, other drawer items are TODO placeholders)
+  - `group_chat_screen.dart` - Group chat conversation (Firestore messages stream)
+  - `instructor_chat_screen.dart` - Instructor DM (placeholder, not Firestore-backed)
+  - `message.dart` / `chat_item.dart` - Data models
+  - `chat_avatars.dart` - Chat avatar utilities
+  - `group_chat_tile.dart` - Group chat list tile widget
+  - `instructor_chat_tile.dart` - Instructor chat list tile widget
+  - `announcement_button/` - Announcement dialog (faculty only)
+  - `create_group_chat_button.dart` - Create group chat UI
+- **`lib/pages/home_hamburger/settings_screen/settings_screen.dart`** - Settings screen
 
 ### State Management
 
-Uses `setState` for local widget state. `AuthWrapper` uses `StreamBuilder` for reactive auth state. SharedPreferences persists pending verification data (`pending_email`, `pending_role`).
+`setState` for local widget state. `StreamBuilder` for auth state. `SharedPreferences` for pending verification state (`pending_email`, `pending_role`).
 
-## Key Dependencies
+### Assets
 
-- **Firebase**: `firebase_core`, `firebase_auth`, `cloud_firestore` - Auth and data storage
-- **Network**: `http` - HTTP requests
-- **Local Storage**: `shared_preferences` - Persists pending verification state; `hive_ce`, `hive_ce_flutter` (not yet initialized)
-- **UI**: `flutter_spinkit` (loading indicators), `app_links` (deep linking), `url_launcher`
-- **Platform**: `android_intent_plus` for Android-specific intents
-- **Utilities**: `intl` (date formatting), `logging` (logging framework)
-
-## Assets
-
-- Images stored in `assets/images/` (declared in `pubspec.yaml`)
-- Currently contains: `joker.png`, `dragon.jpg`
-
-## Firebase Configuration
-
-- Android config present at `android/app/google-services.json`
-- iOS config not yet present (may need `ios/Runner/GoogleService-Info.plist`)
-
-## Email Verification System
-
-New accounts require email verification via Firebase (`VerifyEmailScreen`):
-- 10-minute countdown timer with polling every 3 seconds
-- Persists state via SharedPreferences (survives app restart)
-- "Cancel & Try Different Email" option if user entered wrong email
-- Auto-deletes unverified accounts after timeout
-- On verification: saves user data to Firestore `users` collection
+Assets located in `assets/images/` (per `pubspec.yaml`). App uses `assets/images/avatar.png` for user avatars.
 
 ## Conventions
 
-- Email validation enforces CarSU format: `FirstName.LastName@carsu.edu.ph` (regex: `^[a-zA-Z]+\.[a-zA-Z]+@carsu\.edu\.ph$`)
-- Theme colors centralized in `AppColors` class - use these instead of hardcoded colors
-- Role is passed as String ('student'/'faculty') - check `widget.role == 'faculty'` for conditional UI
-- `withValues(alpha: ...)` preferred over deprecated `withOpacity()` (some files still use `withOpacity` - see analyzer warnings)
+- Email validation: `^[a-zA-Z]+\.[a-zA-Z]+@carsu\.edu\.ph$` (enforced in login, signup, add member)
+- Use `AppColors` (in `lib/themes/app_colors.dart`) instead of hardcoded colors
+- Role checks: `widget.role == 'faculty'` for conditional UI
+- **`withValues(alpha:)`** preferred over deprecated `withOpacity()` (some files still use `withOpacity` - see analyzer warnings)
+
+## Key Dependencies
+
+`firebase_core`, `firebase_auth`, `cloud_firestore`, `shared_preferences`, `flutter_spinkit`, `app_links`, `url_launcher`, `intl`, `hive_ce`, `hive_ce_flutter` (not yet initialized), `android_intent_plus`, `http`, `logging`, `cupertino_icons`
 
 ## Known Issues
 
-- **No tests exist** - test directory is empty, no `test/` files created yet
-- **Hardcoded colors** - Several screens (`login_screen.dart`, `sign_up_screen.dart`, `verify_email_screen.dart`, `reset_password_screen.dart`) use `Colors.grey[100]`, `Colors.green`, `Colors.blue` instead of `AppColors`
-- **Dark mode not functional** - Themes defined in `themes/` but `ThemeMode.light` is hardcoded in `main.dart`
-- **Firestore integration incomplete** - ChatsScreen, GroupChatScreen, InstructorChatScreen use sample data; TODO comments mark Firebase integration points
-- **Drawer navigation placeholders** - Most drawer items in ChatsScreen navigate to nothing (TODO comments)
+- **No tests** - test directory is empty
+- **Hardcoded colors** - `login_screen.dart`, `sign_up_screen.dart`, `verify_email_screen.dart`, `reset_password_screen.dart` use `Colors.grey[100]`, `Colors.green`, `Colors.blue` instead of `AppColors`
+- **Deprecated `withOpacity()` usage** - `chats_screen.dart` (lines 216, 229, 435), also other screens mentioned above
+- **Dark mode not functional** - Themes defined but `ThemeMode.light` hardcoded in main.dart
+- **Drawer placeholders** - Most drawer items in ChatsScreen navigate to nothing (TODO comments)
+- **Instructor DMs hardcoded** - `_instructorChats` list in `chats_screen.dart:82-98` is static placeholder data, not from Firestore
+- **iOS config missing** - No `ios/Runner/GoogleService-Info.plist`
+- **Analyzer warnings** - Unused variables in `group_chat_screen.dart`
+- **Hive CE not initialized** - Both `hive_ce` and `hive_ce_flutter` dependencies included but not yet initialized
+
+## Email Verification
+
+`VerifyEmailScreen` (`lib/pages/verify_email/`): 10-min countdown, polls every 3s, persists to SharedPreferences, auto-deletes unverified accounts on timeout. On verification: saves user to Firestore `users` collection.

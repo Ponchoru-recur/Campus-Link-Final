@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chat_item.dart';
 import 'package:luminescence/themes/app_colors.dart';
@@ -8,6 +10,7 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_scre
 import 'package:luminescence/pages/home_hamburger/channel_screen/instructor_chat_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/announcement_button/announcement_dialog.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/create_group_chat_button.dart';
+import 'package:luminescence/pages/home_hamburger/settings_screen/settings_screen.dart';
 
 /// The main Chats / Channels screen shown after login.
 /// Contains the navigation drawer and the list of group chats + instructor DMs.
@@ -19,53 +22,62 @@ class ChatsScreen extends StatefulWidget {
 }
 
 class _ChatsScreenState extends State<ChatsScreen> {
-  // ── Sample Data ── Replace with real data source / API calls later
-  final _groupChats = <ChatItem>[
-    ChatItem(
-      id: 'g1',
-      name: 'ITE16 - NO1',
-      lastMessage: 'Welcome to the group!',
-      time: '9:30 AM',
-      type: ChatType.groupChat,
-    ),
-    ChatItem(
-      id: 'g2',
-      name: 'ITE14 - FJ1',
-      lastMessage: "Don't forget the deadline",
-      time: '9:15 AM',
-      type: ChatType.groupChat,
-      unreadCount: 2,
-    ),
-    ChatItem(
-      id: 'g3',
-      name: 'CSC - 103',
-      lastMessage: 'Meeting at 2pm tomorrow',
-      time: '8:45 AM',
-      type: ChatType.groupChat,
-    ),
-    ChatItem(
-      id: 'g4',
-      name: 'CSC - 104',
-      lastMessage: 'Check the new assignment',
-      time: '8:30 AM',
-      type: ChatType.groupChat,
-      unreadCount: 1,
-    ),
-    ChatItem(
-      id: 'g5',
-      name: 'PATFIT4 - A12',
-      lastMessage: 'See you all next week',
-      time: 'Yesterday',
-      type: ChatType.groupChat,
-    ),
-    ChatItem(
-      id: 'g6',
-      name: 'CSC106 - BCG1',
-      lastMessage: 'Great work everyone!',
-      time: 'Yesterday',
-      type: ChatType.groupChat,
-    ),
-  ];
+  List<ChatItem> _groupChats = [];
+  bool _isCreatingGroup = false;
+  StreamSubscription<QuerySnapshot>? _groupChatsSubscription;
+
+  String get _userEmail => FirebaseAuth.instance.currentUser?.email ?? '';
+
+  String get _userName {
+    final email = _userEmail;
+    if (email.isEmpty) return '';
+    final namePart = email.split('@').first;
+    return namePart
+        .split('.')
+        .map((part) => part.isEmpty ? part : part[0].toUpperCase() + part.substring(1))
+        .join(' ');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _setupGroupChatsStream();
+  }
+
+  void _setupGroupChatsStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _groupChatsSubscription = FirebaseFirestore.instance
+        .collection('group_chats')
+        .where('members', arrayContains: user.uid)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          _groupChats = snapshot.docs.map((doc) {
+            return ChatItem(
+              id: doc.id,
+              name: doc['name'] ?? '',
+              lastMessage: doc['lastMessage'] ?? '',
+              time: doc['time'] ?? 'Now',
+              type: ChatType.groupChat,
+            );
+          }).toList();
+        });
+      },
+      onError: (e) {
+        debugPrint('Error in group chats stream: $e');
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _groupChatsSubscription?.cancel();
+    super.dispose();
+  }
 
   final List<ChatItem> _instructorChats = const [
     ChatItem(
@@ -103,46 +115,81 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create New Group Chat'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Group name',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Create New Group Chat'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Group name',
+              border: OutlineInputBorder(),
             ),
-            onPressed: () {
-              final name = controller.text.trim();
-              if (name.isNotEmpty) {
-                setState(() {
-                  _groupChats.add(
-                    ChatItem(
-                      id: 'g${DateTime.now().millisecondsSinceEpoch}',
-                      name: name,
-                      lastMessage: '',
-                      time: 'Now',
-                      type: ChatType.groupChat,
-                    ),
-                  );
-                });
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Create'),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: _isCreatingGroup
+                  ? null
+                  : () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: _isCreatingGroup
+                  ? null
+                  : () async {
+                      final name = controller.text.trim();
+                      if (name.isEmpty) return;
+
+                      setDialogState(() => _isCreatingGroup = true);
+                      try {
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user != null) {
+                          await FirebaseFirestore.instance
+                              .collection('group_chats')
+                              .add({
+                            'name': name,
+                            'lastMessage': '',
+                            'time': 'Now',
+                            'type': 'groupChat',
+                            'createdBy': user.uid,
+                            'members': [user.uid],
+                            'unreadCount': 0,
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+                        }
+                        if (mounted) Navigator.pop(dialogContext);
+                      } catch (e) {
+                        if (mounted) {
+                          Navigator.pop(dialogContext);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text('Failed to create group: $e')),
+                          );
+                        }
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isCreatingGroup = false);
+                        }
+                      }
+                    },
+              child: _isCreatingGroup
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Create'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -188,17 +235,17 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  'Sam Varela',
-                  style: TextStyle(
+                Text(
+                  _userName,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
                 ),
-                const Text(
-                  'sam.varela@carsu.edu.ph',
-                  style: TextStyle(
+                Text(
+                  _userEmail,
+                  style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 13,
                   ),
@@ -247,7 +294,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   label: 'Settings',
                   onTap: () {
                     Navigator.pop(context);
-                    // TODO: navigate to Settings
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    );
                   },
                 ),
                 _DrawerItem(
@@ -387,3 +439,4 @@ class _DrawerItem extends StatelessWidget {
     );
   }
 }
+

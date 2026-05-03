@@ -2,7 +2,19 @@
   "permissions": {
     "allow": [
       "Bash(flutter analyze *)",
-      "Bash(flutter pub *)"
+      "Bash(flutter pub *)",
+      "Bash(flutter run *)",
+      "Bash(Get-ChildItem C:\\\\Users\\\\Sam\\\\Desktop\\\\Knowledge Folder\\\\Flutter Shenanigans\\\\Final\\\\luminescence\\\\lib\\\\pages\\\\home_hamburger\\\\settings_screen *)",
+      "Bash(flutter build *)",
+      "Bash(git checkout *)",
+      "Bash(cat)",
+      "Bash(python /tmp/fix_group_chat.py)",
+      "PowerShell(flutter analyze *)",
+      "PowerShell(flutter build *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\Sam\\\\Desktop\\\\Knowledge Folder\\\\Flutter Shenanigans\\\\Final\\\\luminescence\\\\lib\\\\pages\\\\home_hamburger\\\\channel_screen\\\\group_chat_screen.dart\")",
+      "Bash(Select-String -Pattern \"fromLTRB\" -Context 0,2)",
+      "Bash(Select-Object -First 20)",
+      "PowerShell(flutter pub *)"
     ]
   }
 }
