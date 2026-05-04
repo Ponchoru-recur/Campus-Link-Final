@@ -19,4 +19,4 @@ class ChatItem {
   });
 }
 
-enum ChatType { groupChat, instructor }
+enum ChatType { groupChat, directMessage }
