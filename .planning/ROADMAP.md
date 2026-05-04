@@ -39,6 +39,13 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 
 **Requirements**: IDM-05, IDM-11, IDM-12, IDM-13, IDM-15
 
+**Plans:** 3 plans
+
+**Plan list**:
+- [ ] 02-01-PLAN.md — Create IndividualChatScreen with Firestore stream and send message
+- [ ] 02-02-PLAN.md — Implement read receipts in DMs
+- [ ] 02-03-PLAN.md — Build Firestore-backed DM list in ChatsScreen
+
 **Success criteria**:
 1. New `individual_chat_screen.dart` (or repurposed `instructor_chat_screen.dart`) displays real-time 1-on-1 messages from Firestore stream
 2. Users can send/receive messages in DMs with real-time sync (same behavior as group chats)
