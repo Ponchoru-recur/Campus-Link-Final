@@ -5,9 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chat_item.dart';
 import 'package:luminescence/themes/app_colors.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_tile.dart';
-import 'package:luminescence/pages/home_hamburger/channel_screen/instructor_chat_tile.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_screen.dart';
-import 'package:luminescence/pages/home_hamburger/channel_screen/instructor_chat_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/announcement_button/announcement_dialog.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/create_group_chat_button.dart';
 import 'package:luminescence/pages/home_hamburger/settings_screen/settings_screen.dart';
@@ -111,35 +109,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
     super.dispose();
   }
 
-  final List<ChatItem> _instructorChats = const [
-    ChatItem(
-      id: 'i1',
-      name: 'Prof. Maria Santos',
-      lastMessage: 'Your midterm exam is scheduled for next week',
-      time: '10:30 AM',
-      type: ChatType.instructor,
-      unreadCount: 1,
-    ),
-    ChatItem(
-      id: 'i2',
-      name: 'Dr. John Rivera',
-      lastMessage: 'Please review the lecture notes I sent',
-      time: '9:50 AM',
-      type: ChatType.instructor,
-    ),
-  ];
 
   void _openGroupChat(ChatItem chat) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => GroupChatScreen(chat: chat)),
-    );
-  }
-
-  void _openInstructorChat(ChatItem chat) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => InstructorChatScreen(chat: chat)),
     );
   }
 
@@ -550,13 +524,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
           const Divider(height: 1, color: AppColors.divider),
           // ── Create Group Chat Button (Faculty only) ──
           if (_userRole == 'faculty') CreateGroupChatButton(onTap: _onCreateGroupChat),
-          // ── Instructor DMs ──
-          ..._instructorChats.map(
-            (chat) => InstructorChatTile(
-              chat: chat,
-              onTap: () => _openInstructorChat(chat),
-            ),
-          ),
           const SizedBox(height: 16),
         ],
       ),
