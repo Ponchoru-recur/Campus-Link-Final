@@ -5,8 +5,8 @@
 | # | Phase | Goal | Requirements | Success Criteria |
 |---|-------|------|--------------|------------------|
 | 1 | Clean Slate & Data Model | Remove dummy data, define Firestore schema for 1-on-1 DMs | IDM-01, DB-01, DB-02, DB-03 | 3 | ✓ |
-| 2 | DM Infrastructure | Build Firestore-backed individual messaging with real-time streams | IDM-05, IDM-11, IDM-12, IDM-13, IDM-15 | 4 |
-| 3 | Auto-Wire Contacts | Auto-add instructor contacts when students join group chats; handle instructor additions | IDM-03, IDM-04, IDM-14 | 3 |
+| 2 | DM Infrastructure | Build Firestore-backed individual messaging with real-time streams | IDM-05, IDM-11, IDM-12, IDM-13, IDM-15 | 4 | ✓ |
+| 3 | Auto-Wire Contacts | Auto-add instructor contacts when students join group chats; handle instructor additions | IDM-03, IDM-04, IDM-14 | 3 | ✓ |
 | 4 | Contact Search & Add | Search bar to find and add student/instructor peers as DM contacts | IDM-06, IDM-07 | 2 |
 | 5 | Visual Distinction | Distinguish instructor DMs from student DMs in chat list | IDM-08, IDM-09, IDM-10 | 2 |
 
@@ -14,7 +14,7 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 
 ---
 
-### Phase 1: Clean Slate & Data Model
+### Phase1: Clean Slate & Data Model
 
 **Goal**: Remove hardcoded dummy instructor chats and establish Firestore schema for 1-on-1 messaging.
 
@@ -33,18 +33,30 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 
 ---
 
-### Phase 2: DM Infrastructure
+### Phase2: DM Infrastructure
 
 **Goal**: Build the individual chat conversation screen with real-time Firestore messaging.
 
 **Requirements**: IDM-05, IDM-11, IDM-12, IDM-13, IDM-15
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 **Plan list**:
-- [ ] 02-01-PLAN.md — Create IndividualChatScreen with Firestore stream and send message
-- [ ] 02-02-PLAN.md — Implement read receipts in DMs
-- [ ] 02-03-PLAN.md — Build Firestore-backed DM list in ChatsScreen
+
+**Wave 0 *(test stubs)***
+- [x] 02-00-PLAN.md — Create DM test stubs
+
+**Wave 1 *(blocks on Wave 0)***
+- [x] 02-01-PLAN.md — Create IndividualChatScreen with Firestore stream and send message
+- [x] 02-02-PLAN.md — Implement read receipts in DMs
+
+**Wave 2 *(blocks on Wave 1)***
+- [x] 02-03-PLAN.md — Build Firestore-backed DM list in ChatsScreen
+
+**Cross-cutting constraints:**
+- `direct_messages` collection schema (Phase 1) — used by all 3 Wave 1+ plans
+- `Message` model reuse — required by 02-01 and 02-02
+- `AppColors.primary` (#3BB77E) accent — required by 02-01 per 02-UI-SPEC.md
 
 **Success criteria**:
 1. New `individual_chat_screen.dart` (or repurposed `instructor_chat_screen.dart`) displays real-time 1-on-1 messages from Firestore stream
@@ -54,7 +66,7 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 
 ---
 
-### Phase 3: Auto-Wire Contacts
+### Phase3: Auto-Wire Contacts
 
 **Goal**: Automatically create DM contacts when students join group chats with instructors, and handle instructor additions.
 
@@ -67,19 +79,26 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 
 ---
 
-### Phase 4: Contact Search & Add
+### Phase4: Contact Search & Add
 
 **Goal**: Allow users to search for and add student/instructor peers as individual contacts.
 
 **Requirements**: IDM-06, IDM-07
 
+**Plans:** 3 plans
+
+**Plan list**:
+- [ ] 04-00-PLAN.md — Create test stubs (Wave 0)
+- [ ] 04-01-PLAN.md — Add search bar UI and user search (Wave 1)
+- [ ] 04-02-PLAN.md — Implement add contact with DM creation (Wave 1)
+
 **Success criteria**:
 1. Search bar in chat list screen allows users to search by email or name within `@carsu.edu.ph` domain, reusing existing `^[a-zA-Z]+\.[a-zA-Z]+@carsu\.edu\.ph$` regex
-2. Search results show matching users from Firestore `users` collection; tapping a result adds them to the user's DM contact list (creates `instructor_chats` document if not already existing)
+2. Search results show matching users from Firestore `users` collection; tapping a result adds them to the user's DM contact list (creates `direct_messages` document if not already existing)
 
 ---
 
-### Phase 5: Visual Distinction
+### Phase5: Visual Distinction
 
 **Goal**: Make instructor DMs visually distinct from student DMs in the chat list.
 
