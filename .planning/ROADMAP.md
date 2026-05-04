@@ -20,10 +20,16 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 
 **Requirements**: IDM-01, DB-01, DB-02, DB-03
 
+**Plans:** 2 plans
+
+**Plan list**:
+- [ ] 01-01-PLAN.md — Remove _instructorChats and update ChatType enum
+- [ ] 01-02-PLAN.md — Create DirectMessageItem model and verify DM schema
+
 **Success criteria**:
 1. `chats_screen.dart` no longer has hardcoded `_instructorChats` list — DM list is empty until contacts are added
-2. Firestore `instructor_chats` collection schema defined with `participants[]`, `participantRoles{}`, `lastMessage`, `time`, `createdAt`, `unreadCount` per participant
-3. `instructor_chats/{chatId}/messages/{messageId}` subcollection schema matches group chat message schema (`senderId`, `senderName`, `text`, `timestamp`, `readBy`, `type`, `editHistory`, `isDeleted`)
+2. Firestore `direct_messages` collection schema defined with `members[]`, `unreadCount` Map per participant, `lastMessage`, `time`, `createdAt`
+3. `direct_messages/{chatId}/messages/{messageId}` subcollection schema matches group chat message schema (`senderId`, `senderName`, `text`, `timestamp`, `readBy`, `type`, `editHistory`, `isDeleted`)
 
 ---
 
