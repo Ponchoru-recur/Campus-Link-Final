@@ -35,6 +35,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   StreamSubscription<DocumentSnapshot>? _groupDocSubscription;
   bool _isMarkingRead = false;
 
+  // Search
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   // Messages loaded from Firestore stream
   final List<Message> _messages = [];
 
@@ -335,148 +339,206 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 'Group Chat',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
-              const SizedBox(height: 20),
-              // Members header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Members (${_firestoreMembers.length})',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+              const SizedBox(height: 16),
+              // Search bar
+              TextField(
+                controller: _searchController,
+                onChanged: (value) {
+                  setSheetState(() {
+                    _searchQuery = value.trim().toLowerCase();
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search messages...',
+                  hintStyle: const TextStyle(color: AppColors.textSecondary),
+                  prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setSheetState(() {
+                              _searchQuery = '';
+                            });
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: const Color(0xFFF5F5F5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
                   ),
-                  if (_isSelectionMode) ...[
-                    TextButton(
-                      onPressed: _selectedMemberUids.isEmpty
-                          ? null
-                          : () {
-                              _removeMembers(setSheetState);
-                            },
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_searchQuery.isEmpty) ...[
+                // Members header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Members (${_firestoreMembers.length})',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
-                      child: Text('Remove (${_selectedMemberUids.length})'),
                     ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () {
-                        setSheetState(() {
-                          _isSelectionMode = false;
-                          _selectedMemberUids.clear();
-                        });
-                      },
-                      child: const Text('Cancel'),
-                    ),
-                  ] else ...[
-                    if (_isAdmin)
-                      TextButton.icon(
-                        onPressed: () {
-                          setSheetState(() {
-                            _isSelectionMode = true;
-                            _selectedMemberUids.clear();
-                          });
-                        },
-                        icon: const Icon(Icons.check_box, size: 18),
-                        label: const Text('Select'),
+                    if (_isSelectionMode) ...[
+                      TextButton(
+                        onPressed: _selectedMemberUids.isEmpty
+                            ? null
+                            : () {
+                                _removeMembers(setSheetState);
+                              },
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.red,
                         ),
+                        child: Text('Remove (${_selectedMemberUids.length})'),
                       ),
-                    TextButton.icon(
-                      onPressed: _isAdmin
-                          ? () {
-                              _addMember(context, setSheetState);
-                            }
-                          : null,
-                      icon: const Icon(Icons.person_add, size: 18),
-                      label: const Text('Add'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.primary,
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () {
+                          setSheetState(() {
+                            _isSelectionMode = false;
+                            _selectedMemberUids.clear();
+                          });
+                        },
+                        child: const Text('Cancel'),
                       ),
-                    ),
-                  ],
-                ],
-              ),
-              const Divider(height: 1),
-              // Members list
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: _firestoreMembers.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final member = _firestoreMembers[index];
-                    final uid = member['uid'] as String;
-                    final isSelected = _selectedMemberUids.contains(uid);
-                    final isCurrentUser = uid == FirebaseAuth.instance.currentUser?.uid;
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: GestureDetector(
-                        onTap: _isSelectionMode && !isCurrentUser
+                    ] else ...[
+                      if (_isAdmin)
+                        TextButton.icon(
+                          onPressed: () {
+                            setSheetState(() {
+                              _isSelectionMode = true;
+                              _selectedMemberUids.clear();
+                            });
+                          },
+                          icon: const Icon(Icons.check_box, size: 18),
+                          label: const Text('Select'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                        ),
+                      TextButton.icon(
+                        onPressed: _isAdmin
                             ? () {
-                                setSheetState(() {
-                                  if (isSelected) {
-                                    _selectedMemberUids.remove(uid);
-                                  } else {
-                                    _selectedMemberUids.add(uid);
-                                  }
-                                });
+                                _addMember(context, setSheetState);
                               }
                             : null,
-                        child: Stack(
-                          children: [
-                            CircleAvatar(
-                              radius: 18,
-                              backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                              child: Text(
-                                (member['name'] as String)[0],
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.primaryDark,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            if (_isSelectionMode && !isCurrentUser)
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  width: 16,
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? Colors.red : Colors.grey[300],
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 1),
-                                  ),
-                                  child: isSelected
-                                      ? const Icon(Icons.check, size: 12, color: Colors.white)
-                                      : null,
-                                ),
-                              ),
-                          ],
+                        icon: const Icon(Icons.person_add, size: 18),
+                        label: const Text('Add'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primary,
                         ),
                       ),
-                      title: Text(
-                        member['name'] as String,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      subtitle: Text(
-                        member['role'] as String,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    );
-                  },
+                    ],
+                  ],
                 ),
-              ),
+                const Divider(height: 1),
+                // Members list
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _firestoreMembers.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final member = _firestoreMembers[index];
+                      final uid = member['uid'] as String;
+                      final isSelected = _selectedMemberUids.contains(uid);
+                      final isCurrentUser = uid == FirebaseAuth.instance.currentUser?.uid;
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: GestureDetector(
+                          onTap: _isSelectionMode && !isCurrentUser
+                              ? () {
+                                  setSheetState(() {
+                                    if (isSelected) {
+                                      _selectedMemberUids.remove(uid);
+                                    } else {
+                                      _selectedMemberUids.add(uid);
+                                    }
+                                  });
+                                }
+                              : null,
+                          child: Stack(
+                            children: [
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                                child: Text(
+                                  (member['name'] as String)[0],
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.primaryDark,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              if (_isSelectionMode && !isCurrentUser)
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? Colors.red : Colors.grey[300],
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 1),
+                                    ),
+                                    child: isSelected
+                                        ? const Icon(Icons.check, size: 12, color: Colors.white)
+                                        : null,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        title: Text(
+                          member['name'] as String,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        subtitle: Text(
+                          member['role'] as String,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ] else ...[
+                // Search results header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Search Results',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '${_messages.where((m) => !m.isDeleted && m.type != 'system' && (m.text.toLowerCase().contains(_searchQuery) || m.senderName.toLowerCase().contains(_searchQuery))).length} found',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Search results list
+                Flexible(
+                  child: _buildSearchResults(setSheetState),
+                ),
+              ],
             ],
           ),
         ),
@@ -890,7 +952,97 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _groupDocSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  // Build search results list
+  Widget _buildSearchResults(StateSetter setSheetState) {
+    final query = _searchQuery.toLowerCase();
+    final results = _messages
+        .asMap()
+        .entries
+        .where((entry) {
+          final msg = entry.value;
+          if (msg.isDeleted || msg.type == 'system') return false;
+          return msg.text.toLowerCase().contains(query) ||
+              msg.senderName.toLowerCase().contains(query);
+        })
+        .toList()
+        .reversed
+        .toList(); // Show newest first
+
+    if (results.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Text(
+            'No messages found',
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      shrinkWrap: true,
+      itemCount: results.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final entry = results[index];
+        final msg = entry.value;
+        final originalIndex = entry.key;
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(vertical: 4),
+          leading: CircleAvatar(
+            radius: 16,
+            backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+            child: Text(
+              msg.senderName.isNotEmpty ? msg.senderName[0] : '?',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.primaryDark,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          title: Text(
+            msg.senderName,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                msg.text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _formatTime(msg.timestamp),
+                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+              ),
+            ],
+          ),
+          onTap: () {
+            Navigator.pop(context);
+            _scrollToMessage(originalIndex);
+          },
+        );
+      },
+    );
+  }
+
+  void _scrollToMessage(int index) {
+    if (index < 0 || index >= _messages.length) return;
+    final position = index * 60.0;
+    _scrollController.animateTo(
+      position,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   @override

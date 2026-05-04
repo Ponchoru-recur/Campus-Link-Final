@@ -138,7 +138,7 @@ Campus Link - Implementation Requirements
         Preview behavior options
 
 
-    Do Not Disturb (DND) Scheduling
+Do Not Disturb (DND) Scheduling
 
         Set custom DND time periods
 
