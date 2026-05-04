@@ -9,6 +9,9 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_scre
 import 'package:luminescence/pages/home_hamburger/channel_screen/announcement_button/announcement_dialog.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/create_group_chat_button.dart';
 import 'package:luminescence/pages/home_hamburger/settings_screen/settings_screen.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_item.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_tile.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/individual_chat_screen.dart';
 
 /// The main Chats / Channels screen shown after login.
 /// Contains the navigation drawer and the list of group chats + instructor DMs.
@@ -21,10 +24,16 @@ class ChatsScreen extends StatefulWidget {
 
 class _ChatsScreenState extends State<ChatsScreen> {
   List<ChatItem> _groupChats = [];
+  List<DirectMessageItem> _directMessages = [];
   bool _isCreatingGroup = false;
   StreamSubscription<QuerySnapshot>? _groupChatsSubscription;
+  StreamSubscription<QuerySnapshot>? _directMessagesSubscription;
   String _userRole = 'student';
   bool _isDisposed = false;
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _cachedUsers = [];
+  List<Map<String, dynamic>> _searchResults = [];
 
   String get _userEmail => FirebaseAuth.instance.currentUser?.email ?? '';
 
@@ -42,7 +51,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void initState() {
     super.initState();
     _setupGroupChatsStream();
+    _setupDirectMessagesStream();
     _fetchUserRole();
+    _fetchAndCacheUsers();
+    _searchController.addListener(() {
+      _filterSearch(_searchController.text);
+    });
   }
 
   void _fetchUserRole() async {
@@ -69,6 +83,67 @@ class _ChatsScreenState extends State<ChatsScreen> {
         debugPrint('Error fetching user role: $e');
       }
     }
+  }
+
+  Future<void> _fetchAndCacheUsers() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .get();
+      if (_isDisposed || !mounted) return;
+      setState(() {
+        _cachedUsers = snapshot.docs.map((doc) {
+          final data = doc.data();
+          final email = data['email'] ?? '';
+          final namePart = email.split('@').first;
+          final displayName = namePart
+              .split('.')
+              .map((part) => part.isEmpty
+                  ? part
+                  : part[0].toUpperCase() + part.substring(1))
+              .join(' ');
+          return {
+            'uid': doc.id,
+            'email': email,
+            'role': data['role'] ?? 'student',
+            'displayName': displayName,
+          };
+        }).toList();
+      });
+    } catch (e) {
+      if (!_isDisposed) {
+        debugPrint('Error fetching users: $e');
+      }
+    }
+  }
+
+  void _filterSearch(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults.clear();
+      });
+      return;
+    }
+
+    final lowerQuery = query.toLowerCase();
+    final emailRegex = RegExp(r'^[a-zA-Z]+\.[a-zA-Z]+@carsu\.edu\.ph$');
+    final existingContactUids = _directMessages
+        .map((dm) => dm.otherParticipantUid)
+        .toSet();
+
+    setState(() {
+      _searchResults = _cachedUsers.where((user) {
+        if (!emailRegex.hasMatch(user['email'])) {
+          return false;
+        }
+        if (existingContactUids.contains(user['uid'])) {
+          return false;
+        }
+        final email = (user['email'] ?? '').toLowerCase();
+        final name = (user['displayName'] ?? '').toLowerCase();
+        return email.contains(lowerQuery) || name.contains(lowerQuery);
+      }).take(50).toList();
+    });
   }
 
   void _setupGroupChatsStream() {
@@ -102,10 +177,37 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
+  void _setupDirectMessagesStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || _isDisposed) return;
+
+    _directMessagesSubscription = FirebaseFirestore.instance
+        .collection('direct_messages')
+        .where('members', arrayContains: user.uid)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        if (_isDisposed || !mounted) return;
+        setState(() {
+          _directMessages = snapshot.docs.map((doc) {
+            return DirectMessageItem.fromFirestore(doc, user.uid);
+          }).toList();
+        });
+      },
+      onError: (e) {
+        if (!_isDisposed) {
+          debugPrint('Error in DM stream: $e');
+        }
+      },
+    );
+  }
+
   @override
   void dispose() {
     _isDisposed = true;
     _groupChatsSubscription?.cancel();
+    _directMessagesSubscription?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -114,6 +216,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => GroupChatScreen(chat: chat)),
+    );
+  }
+
+  void _openDirectMessage(DirectMessageItem chat) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => IndividualChatScreen(chat: chat)),
     );
   }
 
@@ -486,26 +595,62 @@ class _ChatsScreenState extends State<ChatsScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        title: const Text(
-          'Chats',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 20,
-            color: Colors.white,
-          ),
-        ),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Search by name or email...',
+                  hintStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                  border: InputBorder.none,
+                ),
+              )
+            : const Text(
+                'Chats',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 20,
+                  color: Colors.white,
+                ),
+              ),
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.send_outlined),
-            tooltip: 'Create Announcement',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (_) => AnnouncementDialog(groupChats: _groupChats),
-              );
-            },
-          ),
+          if (_isSearching)
+            IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: 'Close Search',
+              onPressed: () {
+                setState(() {
+                  _searchController.clear();
+                  _isSearching = false;
+                  _searchResults.clear();
+                });
+              },
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.search),
+              tooltip: 'Search Contacts',
+              onPressed: () {
+                setState(() {
+                  _isSearching = true;
+                });
+              },
+            ),
+          if (!_isSearching)
+            IconButton(
+              icon: const Icon(Icons.send_outlined),
+              tooltip: 'Create Announcement',
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => AnnouncementDialog(groupChats: _groupChats),
+                );
+              },
+            ),
         ],
       ),
       drawer: _buildDrawer(),
@@ -522,8 +667,132 @@ class _ChatsScreenState extends State<ChatsScreen> {
           ),
           // ── Divider ──
           const Divider(height: 1, color: AppColors.divider),
+          // ── Direct Messages Header ──
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Direct Messages',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          // ── Direct Messages List ──
+          ..._directMessages.map(
+            (dm) => DirectMessageTile(
+              chat: dm,
+              onTap: () => _openDirectMessage(dm),
+            ),
+          ),
+          if (_directMessages.isEmpty && !_isSearching)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(
+                child: Text(
+                  'No direct messages yet.\nSearch and add contacts to start chatting.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          // ── Search Results (shown when searching) ──
+          if (_isSearching) ...[
+            const Divider(height: 1, color: AppColors.divider),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                'Search Results',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            if (_searchResults.isEmpty && _searchController.text.isNotEmpty)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(
+                  child: Text(
+                    'No users found.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ..._searchResults.map(
+              (user) => ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                  child: Text(
+                    (user['displayName'] as String).isNotEmpty
+                        ? (user['displayName'] as String)[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                title: Text(
+                  user['displayName'] ?? '',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                subtitle: Text(
+                  user['email'] ?? '',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (user['role'] == 'faculty'
+                            ? AppColors.instructorPurple
+                            : AppColors.primary)
+                        .withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    (user['role'] as String?)?.toUpperCase() ?? 'STUDENT',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: user['role'] == 'faculty'
+                          ? AppColors.instructorPurple
+                          : AppColors.primary,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+                onTap: () {
+                  // TODO: Wave 2 - _addContact(user)
+                  debugPrint('Selected user: ${user['email']}');
+                },
+              ),
+            ),
+          ],
           // ── Create Group Chat Button (Faculty only) ──
-          if (_userRole == 'faculty') CreateGroupChatButton(onTap: _onCreateGroupChat),
+          if (_userRole == 'faculty' && !_isSearching)
+            CreateGroupChatButton(onTap: _onCreateGroupChat),
           const SizedBox(height: 16),
         ],
       ),
