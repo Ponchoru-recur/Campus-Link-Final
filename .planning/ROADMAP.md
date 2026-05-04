@@ -89,7 +89,7 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 
 **Plan list**:
 - [ ] 04-00-PLAN.md — Create test stubs (Wave 0)
-- [ ] 04-01-PLAN.md — Add search bar UI and user search (Wave 1)
+- [x] 04-01-PLAN.md — Add search bar UI and user search (Wave 1)
 - [ ] 04-02-PLAN.md — Implement add contact with DM creation (Wave 2)
 
 **Success criteria**:
