@@ -4,7 +4,7 @@
 
 | # | Phase | Goal | Requirements | Success Criteria |
 |---|-------|------|--------------|------------------|
-| 1 | Clean Slate & Data Model | Remove dummy data, define Firestore schema for 1-on-1 DMs | IDM-01, DB-01, DB-02, DB-03 | 3 |
+| 1 | Clean Slate & Data Model | Remove dummy data, define Firestore schema for 1-on-1 DMs | IDM-01, DB-01, DB-02, DB-03 | 3 | ✓ |
 | 2 | DM Infrastructure | Build Firestore-backed individual messaging with real-time streams | IDM-05, IDM-11, IDM-12, IDM-13, IDM-15 | 4 |
 | 3 | Auto-Wire Contacts | Auto-add instructor contacts when students join group chats; handle instructor additions | IDM-03, IDM-04, IDM-14 | 3 |
 | 4 | Contact Search & Add | Search bar to find and add student/instructor peers as DM contacts | IDM-06, IDM-07 | 2 |
@@ -23,8 +23,8 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 **Plans:** 2 plans
 
 **Plan list**:
-- [ ] 01-01-PLAN.md — Remove _instructorChats and update ChatType enum
-- [ ] 01-02-PLAN.md — Create DirectMessageItem model and verify DM schema
+- [x] 01-01-PLAN.md — Remove _instructorChats and update ChatType enum
+- [x] 01-02-PLAN.md — Create DirectMessageItem model and verify DM schema
 
 **Success criteria**:
 1. `chats_screen.dart` no longer has hardcoded `_instructorChats` list — DM list is empty until contacts are added
