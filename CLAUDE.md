@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Luminescence** (app name: "Campus Link") is a Flutter app for campus communication at Caraga State University. Role-based access (Student/Faculty) with group chats and instructor DMs.
 
+GSD (Get Shit Done) project management is active — `.planning/` directory contains roadmap, requirements, and codebase maps.
+
 - **Dart SDK**: `^3.11.1`
 - **Dart package**: `luminescence` (all imports use `package:luminescence/...`)
 - **Android application ID**: `com.example.luminescence` (from `android/app/google-services.json` — not yet updated from default)
