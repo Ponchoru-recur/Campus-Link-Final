@@ -61,6 +61,11 @@ Campus Link - Implementation Requirements
         View channel membership roster
 
 
+    Channel Specific Details
+
+        When a Instructor removes a member it should show up chat
+        When a Instructor adds a member it should show up on chat
+
 
 
 3. Messaging System

@@ -6,6 +6,7 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/message.dart';
 Future<String?> showMessageActions({
   required BuildContext context,
   required bool canEdit,
+  required bool canDelete,
 }) async {
   return showModalBottomSheet<String>(
     context: context,
@@ -35,14 +36,15 @@ Future<String?> showMessageActions({
             label: 'Copy',
             onTap: () => Navigator.pop(context, 'copy'),
           ),
-          // Delete
-          _ActionTile(
-            icon: Icons.delete,
-            label: 'Delete',
-            color: Colors.red,
-            onTap: () => Navigator.pop(context, 'delete'),
-          ),
-          // Edit (only if sender)
+          // Delete (only within time window)
+          if (canDelete)
+            _ActionTile(
+              icon: Icons.delete,
+              label: 'Delete',
+              color: Colors.red,
+              onTap: () => Navigator.pop(context, 'delete'),
+            ),
+          // Edit (only within time window)
           if (canEdit)
             _ActionTile(
               icon: Icons.edit,

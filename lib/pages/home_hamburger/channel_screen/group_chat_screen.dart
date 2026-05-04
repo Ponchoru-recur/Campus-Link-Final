@@ -8,6 +8,7 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/message.dart';
 import 'package:luminescence/themes/app_colors.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chat_avatars.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/message_actions.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/message_edit_delete.dart';
 
 /// The full conversation screen for a GROUP CHAT.
 /// Edit this file to change how group chat conversations look and behave.
@@ -190,6 +191,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             type: data['type'],
             readBy: List<String>.from(data['readBy'] ?? []),
             editHistory: editHistory,
+            isDeleted: data['isDeleted'] ?? false,
           ));
         }
       });
@@ -564,6 +566,39 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  Future<String> _getCurrentUserName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return 'Unknown';
+    final email = user.email ?? '';
+    if (email.isEmpty) return 'Unknown';
+    return email
+        .split('@')
+        .first
+        .replaceAll('.', ' ')
+        .split(' ')
+        .map((p) => p.isEmpty ? p : p[0].toUpperCase() + p.substring(1))
+        .join(' ');
+  }
+
+  Future<void> _sendSystemMessage(String text) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('group_chats')
+          .doc(widget.chat.id)
+          .collection('messages')
+          .add({
+        'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
+        'senderName': await _getCurrentUserName(),
+        'text': text,
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'system',
+        'readBy': [FirebaseAuth.instance.currentUser?.uid ?? ''],
+      });
+    } catch (e) {
+      debugPrint('Error sending system message: $e');
+    }
+  }
+
   Future<void> _removeMembers(StateSetter setSheetState) async {
     if (_selectedMemberUids.isEmpty) return;
     final confirmed = await showDialog<bool>(
@@ -592,6 +627,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'members': FieldValue.arrayRemove(_selectedMemberUids.toList()),
       });
       await batch.commit();
+
+      final removedNames = _selectedMemberUids
+          .map((uid) => _uidToName[uid] ?? 'Unknown')
+          .join(', ');
+      await _sendSystemMessage('removed $removedNames');
+
       if (!mounted) return;
       setSheetState(() {
         _isSelectionMode = false;
@@ -684,6 +725,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     .update({
                   'members': FieldValue.arrayUnion([newUid]),
                 });
+                await _sendSystemMessage('added $email');
                 if (!mounted) return;
                 Navigator.pop(dialogContext);
                 _loadMembers();
@@ -750,6 +792,16 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   Future<void> _editMessage(Message msg) async {
+    if (!isWithinEditWindow(msg.timestamp)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Messages can only be edited within 60 minutes'),
+          ),
+        );
+      }
+      return;
+    }
     final controller = TextEditingController(text: msg.text);
     final formKey = GlobalKey<FormState>();
     final confirmed = await showDialog<bool>(
@@ -799,23 +851,18 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final newText = controller.text.trim();
     if (newText == msg.text) return;
     try {
-      final msgRef = FirebaseFirestore.instance
-          .collection('group_chats')
-          .doc(widget.chat.id)
-          .collection('messages')
-          .doc(msg.id);
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final snap = await transaction.get(msgRef);
-        final currentText = snap.data()?['text'] ?? '';
-        final editEntry = {
-          'text': currentText,
-          'editedAt': DateTime.now().toIso8601String(),
-        };
-        transaction.update(msgRef, {
-          'text': newText,
-          'editHistory': FieldValue.arrayUnion([editEntry]),
-        });
-      });
+      final ok = await editMessageWithHistory(
+        chatId: widget.chat.id,
+        msg: msg,
+        newText: newText,
+      );
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Messages can only be edited within 60 minutes'),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -827,12 +874,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   Future<void> _deleteMessage(Message msg) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('group_chats')
-          .doc(widget.chat.id)
-          .collection('messages')
-          .doc(msg.id)
-          .delete();
+      await softDeleteMessage(chatId: widget.chat.id, messageId: msg.id);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -905,11 +947,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   message: msg,
                   formatTime: _formatTime,
                   uidToName: _uidToName,
-                  onLongPress: msg.isMe
+                  onLongPress: msg.isMe && !msg.isDeleted
                       ? () async {
                           final action = await showMessageActions(
                             context: context,
-                            canEdit: true,
+                            canEdit: isWithinEditWindow(msg.timestamp),
+                            canDelete: isWithinEditWindow(msg.timestamp),
                           );
                           if (action != null) {
                             await _handleMessageAction(msg, action);
@@ -993,101 +1036,151 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMe = message.isMe;
+    final isSystem = message.type == 'system';
+
+    if (isSystem) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!, width: 0.5),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.info_outline, size: 14, color: Colors.grey[600]),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      '${message.senderName} ${message.text}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[700],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              formatTime(message.timestamp),
+              style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+
     return GestureDetector(
-      onLongPress: onLongPress,
+      onLongPress: message.isDeleted ? null : onLongPress,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!isMe) ...[
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-              child: Text(
-                message.senderName.isNotEmpty ? message.senderName[0] : '?',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.primaryDark,
-                  fontWeight: FontWeight.bold,
+          mainAxisAlignment:
+              isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (!isMe)
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                child: Text(
+                  message.senderName.isNotEmpty ? message.senderName[0] : '?',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 6),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment:
-                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                if (!isMe)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 2),
-                    child: Text(
-                      message.senderName,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isMe ? AppColors.primary : const Color(0xFFF0F0F0),
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(16),
-                      topRight: const Radius.circular(16),
-                      bottomLeft: Radius.circular(isMe ? 16 : 4),
-                      bottomRight: Radius.circular(isMe ? 4 : 16),
-                    ),
-                  ),
-                  child: Text(
-                    message.text,
-                    style: TextStyle(
-                      color: isMe ? Colors.white : AppColors.textPrimary,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
-                  child: Text(
-                    formatTime(message.timestamp),
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                if (isMe) _buildReadReceipt(),
-                if (message.isEdited)
-                  GestureDetector(
-                    onTap: onTapEdited,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2, left: 4),
+            if (!isMe) const SizedBox(width: 6),
+            Flexible(
+              child: Column(
+                crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  if (!isMe)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 2),
                       child: Text(
-                        'edited',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey[500],
-                          fontStyle: FontStyle.italic,
+                        message.senderName,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isMe ? AppColors.primary : const Color(0xFFF0F0F0),
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(16),
+                        topRight: const Radius.circular(16),
+                        bottomLeft: Radius.circular(isMe ? 16 : 4),
+                        bottomRight: Radius.circular(isMe ? 4 : 16),
+                      ),
+                    ),
+                    child: message.isDeleted
+                        ? Text(
+                            'This message was deleted',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          )
+                        : Text(
+                            message.text,
+                            style: TextStyle(
+                              color: isMe ? Colors.white : AppColors.textPrimary,
+                              fontSize: 14,
+                            ),
+                          ),
                   ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
+                    child: Text(
+                      formatTime(message.timestamp),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  if (isMe && !message.isDeleted) _buildReadReceipt(),
+                  if (message.isEdited && !message.isDeleted)
+                    GestureDetector(
+                      onTap: onTapEdited,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 2, left: 4),
+                        child: Text(
+                          'edited',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[500],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 // ─────────────────────────────────────────────

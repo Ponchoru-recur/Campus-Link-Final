@@ -17,6 +17,7 @@ class Message {
   final String? type; // 'system' for system messages
   final List<String> readBy; // UIDs of users who read this
   final List<EditEntry> editHistory; // Previous versions of this message
+  final bool isDeleted; // true if message was soft-deleted
 
   const Message({
     required this.id,
@@ -28,6 +29,7 @@ class Message {
     this.type,
     this.readBy = const [],
     this.editHistory = const [],
+    this.isDeleted = false,
   });
 
   bool get isEdited => editHistory.isNotEmpty;

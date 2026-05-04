@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Luminescence** (app name: "Campus Link") is a Flutter app for campus communication at Caraga State University. Role-based access (Student/Faculty) with group chats and instructor DMs.
 
+- **Dart SDK**: `^3.11.1`
 - **Dart package**: `luminescence` (all imports use `package:luminescence/...`)
 - **Android application ID**: `com.example.luminescence` (from `android/app/google-services.json` — not yet updated from default)
 - **Firebase project ID**: `campus-link-aac60`
@@ -78,6 +79,8 @@ group_chats/{chatId}/messages/{messageId}: senderId, senderName, text, timestamp
   - `group_chat_tile.dart` / `instructor_chat_tile.dart` - List tile widgets
   - `announcement_button/` - Announcement dialog (faculty only)
   - `create_group_chat_button.dart` - Create group chat UI
+  - `message_edit_delete.dart` - Edit/delete message functionality (within 60 min)
+  - `message_actions.dart` - Message action handlers
 - **`lib/pages/home_hamburger/settings_screen/settings_screen.dart`** - Settings with debug role-switching feature
 
 ### State Management
@@ -139,7 +142,7 @@ All planned features are detailed in `docs/REQUIREMENTS.md`. Key unimplemented i
 - **iOS config missing** - No `ios/Runner/GoogleService-Info.plist`
 - **Analyzer warnings** - Unused variables in `group_chat_screen.dart`
 - **Hive CE not initialized** - Both `hive_ce` and `hive_ce_flutter` dependencies included but not yet initialized
-- **temp/ directory** - Contains `priorities.txt`, consider adding to `.gitignore`
+- **temp/ directory** - Contains `priorities.txt`, already gitignored
 
 # Campus Link – Project Rules
 
