@@ -26,7 +26,9 @@
       "Bash(grep -v \"^$\")",
       "Bash(Get-Content \"c:\\\\Users\\\\Sam\\\\Desktop\\\\Knowledge Folder\\\\Flutter Shenanigans\\\\Final\\\\luminescence\\\\CLAUDE.md\")",
       "Bash(Select-String -Pattern \"Implement\")",
-      "Bash(Select-Object LineNumber, Line)"
+      "Bash(Select-Object LineNumber, Line)",
+      "Skill(gsd-new-project)",
+      "Skill(gsd-map-codebase)"
     ]
   }
 }
