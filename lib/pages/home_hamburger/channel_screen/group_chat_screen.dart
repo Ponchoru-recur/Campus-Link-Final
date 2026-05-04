@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chat_item.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/message.dart';
 import 'package:luminescence/themes/app_colors.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chat_avatars.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/message_actions.dart';
 
 /// The full conversation screen for a GROUP CHAT.
 /// Edit this file to change how group chat conversations look and behave.
@@ -27,8 +29,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   final Set<String> _selectedMemberUids = {};
   final Set<String> _markedAsRead = {};
   List<Map<String, dynamic>> _firestoreMembers = [];
+  Map<String, String> _uidToName = {};
   StreamSubscription<QuerySnapshot>? _messagesSubscription;
   StreamSubscription<DocumentSnapshot>? _groupDocSubscription;
+  bool _isMarkingRead = false;
 
   // Messages loaded from Firestore stream
   final List<Message> _messages = [];
@@ -60,7 +64,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           .doc(widget.chat.id)
           .collection('messages');
 
-      // Add message to Firestore
       await messagesRef.add({
         'senderId': user.uid,
         'senderName': senderName,
@@ -70,7 +73,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'readBy': [user.uid],
       });
 
-      // Update group chat's lastMessage and time
       await firestore.collection('group_chats').doc(widget.chat.id).update({
         'lastMessage': text,
         'time': 'Now',
@@ -102,17 +104,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   Future<void> _checkAdminStatus() async {
+    if (!mounted) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
       final groupDoc = await FirebaseFirestore.instance
           .collection('group_chats')
           .doc(widget.chat.id)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
+      if (!mounted) return;
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
       if (!mounted) return;
       final isCreator = groupDoc.data()?['createdBy'] == user.uid;
       final isFaculty = userDoc.data()?['role'] == 'faculty';
@@ -142,6 +148,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     });
   }
 
+  DateTime _parseEditedAt(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
+  }
+
   void _setupMessagesStream() {
     _messagesSubscription = FirebaseFirestore.instance
         .collection('group_chats')
@@ -151,42 +163,64 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
-      setState(() {
+      try {
+        setState(() {
         _messages.clear();
         for (final doc in snapshot.docs) {
           final data = doc.data();
           final senderId = data['senderId'] ?? '';
           final isMe = senderId == FirebaseAuth.instance.currentUser?.uid;
+          final editHistoryRaw = data['editHistory'] as List<dynamic>? ?? [];
+          final editHistory = editHistoryRaw.map((e) {
+            final map = e as Map<String, dynamic>;
+            return EditEntry(
+              text: map['text'] ?? '',
+              editedAt: _parseEditedAt(map['editedAt']),
+            );
+          }).toList();
           _messages.add(Message(
             id: doc.id,
             senderId: senderId,
-            senderName: data['senderName'] ?? 'Unknown',
+            senderName: (data['senderName'] as String?)?.isNotEmpty == true
+                ? data['senderName']
+                : 'Unknown',
             text: data['text'] ?? '',
             timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
             isMe: isMe,
             type: data['type'],
             readBy: List<String>.from(data['readBy'] ?? []),
+            editHistory: editHistory,
           ));
         }
       });
       _markMessagesAsRead();
+      } catch (e, stack) {
+        debugPrint('Error processing messages stream: $e');
+        debugPrint('$stack');
+      }
     }, onError: (e) {
       debugPrint('Error in messages stream: $e');
     });
   }
 
   Future<void> _loadMembers() async {
+    if (!mounted) return;
     try {
       final groupDoc = await FirebaseFirestore.instance
           .collection('group_chats')
           .doc(widget.chat.id)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
       if (!mounted) return;
       final groupData = groupDoc.data();
       if (groupData == null) return;
       final members = List<String>.from(groupData['members'] ?? []);
       final userDocs = await Future.wait(
-        members.map((uid) => FirebaseFirestore.instance.collection('users').doc(uid).get()),
+        members.map((uid) => FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get()
+            .timeout(const Duration(seconds: 10))),
       );
       if (!mounted) return;
       setState(() {
@@ -201,6 +235,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             'role': (isCreator || isFaculty) ? 'Admin' : 'Member',
           };
         }).toList();
+        _uidToName = {
+          for (final m in _firestoreMembers) m['uid'] as String: m['name'] as String,
+        };
       });
     } catch (e) {
       debugPrint('Error loading members: $e');
@@ -208,13 +245,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   Future<void> _markMessagesAsRead() async {
+    if (_isMarkingRead) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     final unreadMessages = _messages.where((m) => !m.isMe && !m.readBy.contains(user.uid)).toList();
     if (unreadMessages.isEmpty) return;
+    _isMarkingRead = true;
     final batch = FirebaseFirestore.instance.batch();
-    for (var i = 0; i < unreadMessages.length; i++) {
-      final msg = unreadMessages[i];
+    for (final msg in unreadMessages) {
       if (_markedAsRead.contains(msg.id)) continue;
       _markedAsRead.add(msg.id);
       final ref = FirebaseFirestore.instance
@@ -230,6 +268,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       await batch.commit();
     } catch (e) {
       debugPrint('Error marking messages as read: $e');
+    } finally {
+      _isMarkingRead = false;
     }
   }
 
@@ -671,8 +711,141 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  Future<void> _handleMessageAction(Message msg, String action) async {
+    if (!msg.isMe) return;
+    switch (action) {
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: msg.text));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Copied to clipboard')),
+          );
+        }
+        break;
+      case 'delete':
+        final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Delete Message'),
+                content: const Text('Delete this message for everyone?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    child: const Text('Delete'),
+                  ),
+                ],
+              ),
+            ) ?? false;
+        if (confirmed) await _deleteMessage(msg);
+        break;
+      case 'edit':
+        await _editMessage(msg);
+        break;
+    }
+  }
+
+  Future<void> _editMessage(Message msg) async {
+    final controller = TextEditingController(text: msg.text);
+    final formKey = GlobalKey<FormState>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit Message'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 4,
+            minLines: 1,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.all(12),
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Message cannot be empty';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(dialogContext, true);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final newText = controller.text.trim();
+    if (newText == msg.text) return;
+    try {
+      final msgRef = FirebaseFirestore.instance
+          .collection('group_chats')
+          .doc(widget.chat.id)
+          .collection('messages')
+          .doc(msg.id);
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snap = await transaction.get(msgRef);
+        final currentText = snap.data()?['text'] ?? '';
+        final editEntry = {
+          'text': currentText,
+          'editedAt': DateTime.now().toIso8601String(),
+        };
+        transaction.update(msgRef, {
+          'text': newText,
+          'editHistory': FieldValue.arrayUnion([editEntry]),
+        });
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to edit: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteMessage(Message msg) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('group_chats')
+          .doc(widget.chat.id)
+          .collection('messages')
+          .doc(msg.id)
+          .delete();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete: $e')),
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
+    _messagesSubscription?.cancel();
+    _groupDocSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -731,6 +904,25 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 return _MessageBubble(
                   message: msg,
                   formatTime: _formatTime,
+                  uidToName: _uidToName,
+                  onLongPress: msg.isMe
+                      ? () async {
+                          final action = await showMessageActions(
+                            context: context,
+                            canEdit: true,
+                          );
+                          if (action != null) {
+                            await _handleMessageAction(msg, action);
+                          }
+                        }
+                      : null,
+                  onTapEdited: msg.isEdited
+                      ? () => showEditHistory(
+                            context: context,
+                            history: msg.editHistory,
+                            formatTime: _formatTime,
+                          )
+                      : null,
                 );
               },
             ),
@@ -752,15 +944,60 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 class _MessageBubble extends StatelessWidget {
   final Message message;
   final String Function(DateTime) formatTime;
+  final Map<String, String> uidToName;
+  final VoidCallback? onTapEdited;
+  final VoidCallback? onLongPress;
 
-  const _MessageBubble({required this.message, required this.formatTime});
+  const _MessageBubble({
+    required this.message,
+    required this.formatTime,
+    this.uidToName = const {},
+    this.onTapEdited,
+    this.onLongPress,
+  });
+
+  Widget _buildReadReceipt() {
+    if (!message.isMe) return const SizedBox.shrink();
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final otherReaders = message.readBy
+        .where((uid) => uid != currentUid)
+        .toList();
+    if (otherReaders.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 2, left: 4),
+        child: Icon(Icons.check, size: 12, color: Colors.grey[400]),
+      );
+    }
+    const int maxDisplayNames = 2;
+    final readerNames = otherReaders
+        .take(maxDisplayNames)
+        .map((uid) => uidToName[uid] ?? 'Unknown')
+        .toList();
+    String receiptText;
+    if (otherReaders.length <= maxDisplayNames) {
+      receiptText = 'Seen by ${readerNames.join(', ')}';
+    } else {
+      final remaining = otherReaders.length - maxDisplayNames;
+      receiptText =
+          'Seen by ${readerNames.join(', ')} and $remaining other${remaining > 1 ? 's' : ''}';
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, left: 4),
+      child: Text(
+        receiptText,
+        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final isMe = message.isMe;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+    return GestureDetector(
+      onLongPress: onLongPress,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
         mainAxisAlignment:
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -768,9 +1005,9 @@ class _MessageBubble extends StatelessWidget {
           if (!isMe) ...[
             CircleAvatar(
               radius: 14,
-              backgroundColor: AppColors.primary.withOpacity(0.2),
+              backgroundColor: AppColors.primary.withValues(alpha: 0.2),
               child: Text(
-                message.senderName[0],
+                message.senderName.isNotEmpty ? message.senderName[0] : '?',
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.primaryDark,
@@ -827,13 +1064,30 @@ class _MessageBubble extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (isMe) _buildReadReceipt(),
+                if (message.isEdited)
+                  GestureDetector(
+                    onTap: onTapEdited,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2, left: 4),
+                      child: Text(
+                        'edited',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[500],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ─────────────────────────────────────────────
@@ -896,3 +1150,4 @@ class _MessageInputBar extends StatelessWidget {
     );
   }
 }
+

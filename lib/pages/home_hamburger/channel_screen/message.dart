@@ -1,3 +1,11 @@
+/// Represents a single edit entry in a message's history.
+class EditEntry {
+  final String text;
+  final DateTime editedAt;
+
+  const EditEntry({required this.text, required this.editedAt});
+}
+
 /// Represents a single message inside a chat conversation.
 class Message {
   final String id;
@@ -8,6 +16,7 @@ class Message {
   final bool isMe;
   final String? type; // 'system' for system messages
   final List<String> readBy; // UIDs of users who read this
+  final List<EditEntry> editHistory; // Previous versions of this message
 
   const Message({
     required this.id,
@@ -18,5 +27,8 @@ class Message {
     required this.isMe,
     this.type,
     this.readBy = const [],
+    this.editHistory = const [],
   });
+
+  bool get isEdited => editHistory.isNotEmpty;
 }
