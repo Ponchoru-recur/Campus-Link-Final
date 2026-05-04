@@ -7,6 +7,7 @@ class EditEntry {
 }
 
 /// Represents a single message inside a chat conversation.
+/// Reused for both group_chats and direct_messages subcollections (DB-02).
 class Message {
   final String id;
   final String senderId;
