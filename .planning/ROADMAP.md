@@ -73,7 +73,7 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 **Requirements**: IDM-03, IDM-04, IDM-14
 
 **Success criteria**:
-1. When a student joins a group chat, any instructors in that group chat are automatically added to the student's DM contact list (Firestore `instructor_chats` document created with both participants)
+1. When a student joins a group chat, any instructors in that group chat are automatically added to the student's DM contact list (Firestore `direct_messages` document created with both participants)
 2. When an instructor is added to an existing group chat, they are added to all group members' DM contact lists
 3. Faculty/instructors in group chats retain admin privileges (add/remove members, rename group) — verified existing behavior, document in code
 
@@ -90,7 +90,7 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 **Plan list**:
 - [ ] 04-00-PLAN.md — Create test stubs (Wave 0)
 - [ ] 04-01-PLAN.md — Add search bar UI and user search (Wave 1)
-- [ ] 04-02-PLAN.md — Implement add contact with DM creation (Wave 1)
+- [ ] 04-02-PLAN.md — Implement add contact with DM creation (Wave 2)
 
 **Success criteria**:
 1. Search bar in chat list screen allows users to search by email or name within `@carsu.edu.ph` domain, reusing existing `^[a-zA-Z]+\.[a-zA-Z]+@carsu\.edu\.ph$` regex
