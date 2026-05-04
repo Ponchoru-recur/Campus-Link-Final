@@ -23,7 +23,10 @@
       "mcp__plugin_context-mode_context-mode__ctx_execute",
       "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
       "Bash(dart format *)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(Get-Content \"c:\\\\Users\\\\Sam\\\\Desktop\\\\Knowledge Folder\\\\Flutter Shenanigans\\\\Final\\\\luminescence\\\\CLAUDE.md\")",
+      "Bash(Select-String -Pattern \"Implement\")",
+      "Bash(Select-Object LineNumber, Line)"
     ]
   }
 }

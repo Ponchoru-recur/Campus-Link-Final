@@ -60,7 +60,7 @@ group_chats/{chatId}/messages/{messageId}: senderId, senderName, text, timestamp
 
 **ChatItem** (`lib/pages/home_hamburger/channel_screen/chat_item.dart`): `id`, `name`, `lastMessage`, `time`, `type` (ChatType enum: `groupChat`/`instructor`), `unreadCount`, `isOnline`.
 
-**Message** (`lib/pages/home_hamburger/channel_screen/message.dart`): `senderId`, `senderName`, `text`, `timestamp`, `type`.
+**Message** (`lib/pages/home_hamburger/channel_screen/message.dart`): `senderId`, `senderName`, `text`, `timestamp`, `type`, `readBy`, `editHistory`, `isDeleted`. `isEdited` getter checks `editHistory.isNotEmpty`.
 
 ### Key Files
 
@@ -73,13 +73,13 @@ group_chats/{chatId}/messages/{messageId}: senderId, senderName, text, timestamp
 - **`lib/pages/reset_password/reset_password_screen.dart`** - Password reset flow
 - **`lib/pages/home_hamburger/channel_screen/`** - Main chat feature
   - `chats_screen.dart` - Channel list with drawer, group chat stream, create/delete group chat, instructor DM list (static placeholder data)
-  - `group_chat_screen.dart` - Group chat conversation (Firestore messages stream, faculty admin controls)
+  - `group_chat_screen.dart` - Group chat conversation (Firestore messages stream, faculty admin controls, in-chat message search via info sheet)
   - `instructor_chat_screen.dart` - Instructor DM (placeholder, not Firestore-backed)
   - `message.dart` / `chat_item.dart` - Data models
   - `group_chat_tile.dart` / `instructor_chat_tile.dart` - List tile widgets
   - `announcement_button/` - Announcement dialog (faculty only)
   - `create_group_chat_button.dart` - Create group chat UI
-  - `message_edit_delete.dart` - Edit/delete message functionality (within 60 min)
+  - `message_edit_delete.dart` - Edit/delete message functionality (within 60 min, implemented)
   - `message_actions.dart` - Message action handlers
 - **`lib/pages/home_hamburger/settings_screen/settings_screen.dart`** - Settings with debug role-switching feature
 
@@ -89,12 +89,19 @@ group_chats/{chatId}/messages/{messageId}: senderId, senderName, text, timestamp
 
 ### Assets
 
-Assets in `assets/images/` (per `pubspec.yaml`). App uses `assets/images/avatar.png` for user avatars.
+Assets in `assets/images/` (per `pubspec.yaml`). App uses `assets/images/avatar.png` for user avatars`.
+
+### Implemented Features
+
+- Message editing/deletion within 60 minutes (soft delete, edit history tracking)
+- Keyword message search in group chats (via info sheet, searches text and sender name)
+- Read receipts (per-message `readBy` array, displayed under sender's messages)
+- System messages for member add/remove (type: 'system')
 
 ### Planned/Unimplemented Features
+
 All planned features are detailed in `docs/REQUIREMENTS.md`. Key unimplemented items:
-- Message editing/deletion (within 60 minutes)
-- Keyword message search, read receipts, priority messaging (Urgent/Standard)
+- Priority messaging (Urgent/Standard) with notification differentiation
 - Do Not Disturb (DND) scheduling with priority override
 - Full FCM push notification integration (dependency added, not yet implemented)
 - Offline caching of recent messages (Hive CE added, not yet initialized)
@@ -102,6 +109,7 @@ All planned features are detailed in `docs/REQUIREMENTS.md`. Key unimplemented i
 - Instructor DMs (currently static placeholder data, not Firestore-backed)
 
 ### Analysis Configuration
+
 `analysis_options.yaml` includes only `package:flutter_lints/flutter.yaml` with no custom rules. Run `flutter analyze` to check.
 
 ## Conventions
@@ -144,9 +152,9 @@ All planned features are detailed in `docs/REQUIREMENTS.md`. Key unimplemented i
 - **Hive CE not initialized** - Both `hive_ce` and `hive_ce_flutter` dependencies included but not yet initialized
 - **temp/ directory** - Contains `priorities.txt`, already gitignored
 
-# Campus Link – Project Rules
+# Campus Link - Project Rules
 
-## ⚠️ Implementation Integrity
+## Implementation Integrity
 
 The full feature requirements are in `docs/REQUIREMENTS.md`.
 
