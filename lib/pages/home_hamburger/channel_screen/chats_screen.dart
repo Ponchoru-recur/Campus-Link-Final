@@ -599,13 +599,17 @@ class _ChatsScreenState extends State<ChatsScreen> {
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+                cursorColor: Colors.white,
                 decoration: InputDecoration(
                   hintText: 'Search by name or email...',
                   hintStyle: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
                   ),
                   border: InputBorder.none,
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.15),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
               )
             : const Text(
@@ -783,10 +787,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     ),
                   ),
                 ),
-                onTap: () {
-                  // TODO: Wave 2 - _addContact(user)
-                  debugPrint('Selected user: ${user['email']}');
-                },
+                onTap: () => _addContact(user),
               ),
             ),
           ],
@@ -797,6 +798,74 @@ class _ChatsScreenState extends State<ChatsScreen> {
         ],
       ),
     );
+  }
+
+  String _generateDmDocId(String uid1, String uid2) {
+    final sorted = [uid1, uid2]..sort();
+    return '${sorted[0]}_${sorted[1]}';
+  }
+
+  Future<void> _addContact(Map<String, dynamic> userData) async {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null || currentUid == userData['uid']) return;
+
+    final dmDocId = _generateDmDocId(currentUid, userData['uid']);
+    final dmRef = FirebaseFirestore.instance.collection('direct_messages').doc(dmDocId);
+    final doc = await dmRef.get();
+
+    if (!doc.exists) {
+      String currentUserRole = 'student';
+      try {
+        final currentUserDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUid)
+            .get();
+        currentUserRole = currentUserDoc.exists
+            ? (currentUserDoc.data()?['role'] ?? 'student')
+            : 'student';
+      } catch (e) {
+        debugPrint('Error fetching current user role: $e');
+      }
+
+      await dmRef.set({
+        'members': [currentUid, userData['uid']],
+        'unreadCount': {currentUid: 0, userData['uid']: 0},
+        'lastMessage': '',
+        'time': 'Now',
+        'createdAt': Timestamp.now(),
+        'participantRoles': {
+          currentUid: currentUserRole,
+          userData['uid']: userData['role'] ?? 'student',
+        },
+      });
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Contact added'),
+        backgroundColor: AppColors.successGreen,
+      ),
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => IndividualChatScreen(
+          otherUid: userData['uid'],
+          otherName: userData['displayName'] ?? '',
+          otherEmail: userData['email'] ?? '',
+          otherRole: userData['role'] ?? 'student',
+          chatId: dmDocId,
+        ),
+      ),
+    );
+
+    setState(() {
+      _isSearching = false;
+      _searchController.clear();
+      _searchResults.clear();
+    });
   }
 }
 
