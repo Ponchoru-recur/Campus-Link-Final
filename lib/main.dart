@@ -79,3 +79,4 @@ class AuthWrapper extends StatelessWidget {
     return VerifyEmailScreen(email: user.email, role: role);
   }
 }
+

@@ -1,13 +1,13 @@
 ---
 phase: 2
 slug: dm-infrastructure
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-04
 ---
 
-# Phase 2 — Validation Strategy
+# Phase2 — Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
 
@@ -38,11 +38,11 @@ created: 2026-05-04
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 02-01-01 | 02-01 | 1 | IDM-05 | T-02-01 | DM screen renders from Firestore stream | widget | `flutter test test/dm_screen_test.dart` | ✅ / ❌ W0 | ⬜ pending |
-| 02-01-02 | 02-01 | 1 | IDM-11 | T-02-02 | Send message writes to Firestore | integration | `flutter test test/dm_send_test.dart` | ✅ / ❌ W0 | ⬜ pending |
-| 02-02-01 | 02-02 | 1 | IDM-12 | T-02-03 | Read receipts update readBy array | unit | `flutter test test/dm_read_receipt_test.dart` | ✅ / ❌ W0 | ⬜ pending |
-| 02-03-01 | 02-03 | 2 | IDM-13 | T-02-04 | DM list shows last message, unread count | widget | `flutter test test/dm_list_test.dart` | ✅ / ❌ W0 | ⬜ pending |
-| 02-03-02 | 02-03 | 2 | IDM-15 | T-02-05 | DM list query uses participants arrayContains | unit | `flutter test test/dm_query_test.dart` | ✅ / ❌ W0 | ⬜ pending |
+| 02-01-01 | 02-01 | 1 | IDM-05 | T-02-01 | DM screen renders from Firestore stream | widget | `flutter test test/dm_screen_test.dart` | ✅ | ✅ green |
+| 02-01-02 | 02-01 | 1 | IDM-11 | T-02-02 | Send message writes to Firestore | integration | `flutter test test/dm_send_test.dart` | ✅ | ✅ green |
+| 02-02-01 | 02-02 | 1 | IDM-12 | T-02-03 | Read receipts update readBy array | unit | `flutter test test/dm_read_receipt_test.dart` | ✅ | ✅ green |
+| 02-03-01 | 02-03 | 2 | IDM-13 | T-02-04 | DM list shows last message, unread count | widget | `flutter test test/dm_list_test.dart` | ✅ | ✅ green |
+| 02-03-02 | 02-03 | 2 | IDM-15 | T-02-05 | DM list query uses participants arrayContains | unit | `flutter test test/dm_query_test.dart` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

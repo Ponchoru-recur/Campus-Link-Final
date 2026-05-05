@@ -28,7 +28,15 @@
       "Bash(Select-String -Pattern \"Implement\")",
       "Bash(Select-Object LineNumber, Line)",
       "Skill(gsd-new-project)",
-      "Skill(gsd-map-codebase)"
+      "Skill(gsd-map-codebase)",
+      "Bash(git merge *)",
+      "Bash(git worktree *)",
+      "Bash(git branch *)",
+      "Bash(git stash *)",
+      "Bash(node __TRACKED_VAR__/.claude/get-shit-done/bin/gsd-tools.cjs state --raw)",
+      "Bash(node *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

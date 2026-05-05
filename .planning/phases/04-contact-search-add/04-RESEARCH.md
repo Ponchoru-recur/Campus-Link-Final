@@ -321,27 +321,31 @@ class SearchResultTile extends StatelessWidget {
 | A5 | `searchName` should be extracted from email (dot-separated: `first.last@...`) | Code Examples | If users can set display names in profiles, should search those instead |
 | A6 | Firestore `users` collection has `email`, `role`, `createdAt`, `emailVerified` fields | Standard Stack, Code Examples | If schema differs, search queries will fail |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Do users have display names in Firestore `users` collection, or should search use email-only?**
+1. **[RESOLVED] Do users have display names in Firestore `users` collection, or should search use email-only?**
    - What we know: Current `users/{uid}` schema has `email`, `role`, `createdAt`, `emailVerified` (per CLAUDE.md)
    - What's unclear: Whether a `displayName` or `name` field exists or should be added
-   - Recommendation: Search email by default; if `displayName` field exists, search that too. Extract name from email as fallback (split on `@`, replace `.` with ` `, capitalize).
+   - Resolution: Search email by default. Extract name from email as fallback (split on `@`, replace `.` with ` `, capitalize). If `displayName` field exists in users collection, include it in search.
+   - Implemented in: 04-01-PLAN.md Task 2 (filter by email and name)
 
-2. **Should the search also show existing DM contacts (to prevent duplicates), or only show new users?**
+2. **[RESOLVED] Should the search also show existing DM contacts (to prevent duplicates), or only show new users?**
    - What we know: `_directMessages` stream already shows existing contacts
    - What's unclear: Should search results filter out existing contacts automatically?
-   - Recommendation: Filter out existing contacts from search results to avoid confusion.
+   - Resolution: Filter out existing contacts from search results. The DM list shows existing contacts separately.
+   - Implemented in: 04-01-PLAN.md Task 2 (filter existing contacts from results)
 
-3. **What UI feedback when tapping a search result?**
+3. **[RESOLVED] What UI feedback when tapping a search result?**
    - What we know: SnackBar pattern used elsewhere (e.g., group chat deletion)
    - What's unclear: Should we navigate to the new DM immediately, or just show confirmation?
-   - Recommendation: Show SnackBar "Contact added" and navigate to IndividualChatScreen. Stream will auto-add to list.
+   - Resolution: Show SnackBar "Contact added" and navigate to IndividualChatScreen. The existing DM stream auto-updates the list.
+   - Implemented in: 04-02-PLAN.md Task 1 (SnackBar) and Task 2 (navigation)
 
-4. **Should we add a `searchName` and `searchEmail` field to `users` documents?**
+4. **[RESOLVED] Should we add a `searchName` and `searchEmail` field to `users` documents?**
    - What we know: Firestore queries for prefix search need lowercase fields
    - What's unclear: Can we add fields to existing user documents?
-   - Recommendation: Yes, add `searchName` (lowercase, no dots) and `searchEmail` (lowercase) fields. Use a one-time migration or set on user registration.
+   - Resolution: Client-side filtering approach (from 04-01-PLAN.md) doesn't require `searchName`/`searchEmail` fields. The app fetches users and filters locally (case-insensitive). If server-side search is needed later, these fields can be added.
+   - Implemented in: 04-01-PLAN.md Task 2 (client-side filtering, no server-side search fields needed)
 
 ## Environment Availability
 

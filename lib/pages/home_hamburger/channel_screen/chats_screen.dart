@@ -12,6 +12,7 @@ import 'package:luminescence/pages/home_hamburger/settings_screen/settings_scree
 import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_item.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_tile.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/individual_chat_screen.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/chats_refresh.dart';
 
 /// The main Chats / Channels screen shown after login.
 /// Contains the navigation drawer and the list of group chats + instructor DMs.
@@ -115,6 +116,25 @@ class _ChatsScreenState extends State<ChatsScreen> {
         debugPrint('Error fetching users: $e');
       }
     }
+  }
+
+  Future<void> _refreshData() async {
+    final refresher = ChatsRefresher(
+      firestore: FirebaseFirestore.instance,
+      onRoleFetched: (role) {
+        if (mounted && !_isDisposed) {
+          setState(() => _userRole = role);
+        }
+      },
+      onUsersFetched: (users) {
+        if (mounted && !_isDisposed) {
+          setState(() => _cachedUsers = users);
+        }
+      },
+      directMessages: _directMessages,
+      currentUserId: FirebaseAuth.instance.currentUser?.uid,
+    );
+    await refresher.refresh();
   }
 
   void _filterSearch(String query) {
@@ -658,7 +678,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
         ],
       ),
       drawer: _buildDrawer(),
-      body: ListView(
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
         children: [
           // ── Group Chats ──
           ..._groupChats.map(
@@ -797,7 +820,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
           const SizedBox(height: 16),
         ],
       ),
-    );
+    ),
+  );
   }
 
   String _generateDmDocId(String uid1, String uid2) {
@@ -836,6 +860,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
         'participantRoles': {
           currentUid: currentUserRole,
           userData['uid']: userData['role'] ?? 'student',
+        },
+        'participantNames': {
+          currentUid: _userName,
+          userData['uid']: userData['displayName'] ?? '',
         },
       });
     }
