@@ -23,6 +23,7 @@ None completed yet.
 
 ## History
 
+- 2026-05-05: Phase 5 context gathered — decisions: tile border (3px purple), pill badge (purple bg+white text, compact), student DMs grey-only, AppBar sufficient
 - 2026-05-05: Phase 4 Plan 1 completed — search bar UI, user cache, local search with domain regex
 - 2026-05-04: Phase 1 context gathered — decisions: `direct_messages` collection, `members[]` field, Map `unreadCount`, create Dart models
 - 2026-05-04: Project initialized, roadmap created (5 phases, 15 v1 requirements mapped)
