@@ -43,11 +43,19 @@ class DirectMessageItem {
       (uid) => uid != currentUserId,
       orElse: () => '',
     );
+
+    // Try participantRoles map first, then fall back to otherParticipantRole
+    String? otherRole;
+    if (data['participantRoles'] is Map) {
+      otherRole = (data['participantRoles'] as Map)[otherUid] as String?;
+    }
+    otherRole ??= data['otherParticipantRole'] as String?;
+
     return DirectMessageItem(
       id: doc.id,
       otherParticipantName: data['otherParticipantName'] ?? 'Unknown',
       otherParticipantUid: otherUid,
-      otherParticipantRole: data['otherParticipantRole'],
+      otherParticipantRole: otherRole,
       lastMessage: data['lastMessage'] ?? '',
       time: data['time'] ?? 'Now',
       unreadCount: (data['unreadCount'] is Map)
