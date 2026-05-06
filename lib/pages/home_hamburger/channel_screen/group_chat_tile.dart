@@ -20,7 +20,7 @@ class GroupChatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasUnread = hasUnread;
+    final hasUnread = chat.unreadCount > 0;
     return InkWell(
       onTap: onTap,
       onLongPress: isFaculty ? () => _showPopupMenu(context) : null,
