@@ -20,6 +20,7 @@ class GroupChatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasUnread = hasUnread;
     return InkWell(
       onTap: onTap,
       onLongPress: isFaculty ? () => _showPopupMenu(context) : null,
@@ -36,9 +37,9 @@ class GroupChatTile extends StatelessWidget {
                   Text(
                     chat.name,
                     style: TextStyle(
-                      fontWeight: chat.unreadCount > 0 ? FontWeight.w700 : FontWeight.w600,
+                      fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
                       fontSize: 15,
-                      color: chat.unreadCount > 0 ? AppColors.primary : AppColors.textPrimary,
+                      color: hasUnread ? AppColors.primary : AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -46,8 +47,8 @@ class GroupChatTile extends StatelessWidget {
                     chat.lastMessage,
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
-                      color: chat.unreadCount > 0 ? AppColors.primary : AppColors.textSecondary,
+                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
+                      color: hasUnread ? AppColors.primary : AppColors.textSecondary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -66,7 +67,7 @@ class GroupChatTile extends StatelessWidget {
                     color: AppColors.textSecondary,
                   ),
                 ),
-                if (chat.unreadCount > 0) ...[
+                if (hasUnread) ...[
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
