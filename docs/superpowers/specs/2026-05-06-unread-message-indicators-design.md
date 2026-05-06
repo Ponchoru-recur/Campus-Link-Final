@@ -14,6 +14,7 @@ Add visual unread message indicators (bold text + accent color + counter badge) 
 | Visual style | C — Accent Color + Bold (WhatsApp style: `AppColors.primary` + `FontWeight.w700/w600`) |
 | Archived header | Unread count only — `Archived (X unread)` |
 | Group chat tracking | Add per-user `unreadCount` map (mirrors DM structure) |
+| Archived section position | Above Direct Messages (between Group Chats and DMs for easy access) |
 
 ## Firestore Schema Changes
 
@@ -90,6 +91,18 @@ When `chat.unreadCount > 0`:
 When `chat.unreadCount == 0`: current styling unchanged.
 
 **Archived DMs**: Same `DirectMessageTile` widget is used — same bold/accent rules apply automatically.
+
+### Archived Section Position (chats_screen.dart)
+
+Move the archived section from bottom (after DMs) to **above Direct Messages** for better accessibility:
+
+**New order in the ListView:**
+1. Search bar
+2. Group Chats list
+3. Archived Header + Archived DMs list (collapsible, `showArchived` toggle)
+4. Direct Messages list
+
+**Implementation:** In the `ListView` builder, move `_buildArchivedHeader()` and archived DMs mapping to before the `_directMessages.map()` section.
 
 ### Archived Header (_buildArchivedHeader() in chats_screen.dart)
 
