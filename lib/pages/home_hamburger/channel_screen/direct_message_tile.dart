@@ -12,9 +12,11 @@ class DirectMessageTile extends StatelessWidget {
     required this.chat,
     required this.onTap,
     this.isArchived = false,
+    this.onLongPress,
   });
 
   final bool isArchived;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +121,7 @@ class DirectMessageTile extends StatelessWidget {
           ],
         ),
         onTap: onTap,
+        onLongPress: onLongPress,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         dense: true,
       ),
