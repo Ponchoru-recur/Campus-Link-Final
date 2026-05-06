@@ -27,7 +27,7 @@ class IndividualChatScreen extends StatefulWidget {
     this.otherEmail,
     this.otherRole,
     this.chatId,
-  }) : assert(chat != null || (otherUid != null && chatId != null),
+  }) : assert(chat != null || (otherUid != null && chatId != null)),
         'Either chat or otherUid+chatId must be provided');
 
   @override
@@ -185,10 +185,14 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
 
     try {
       final firestore = FirebaseFirestore.instance;
-      final messagesRef = firestore
-          .collection('direct_messages')
-          .doc(_chatId)
-          .collection('messages');
+      final dmRef = firestore.collection('direct_messages').doc(_chatId);
+
+      // Auto-unarchive: remove sender from archivedBy if present
+      await dmRef.update({
+        'archivedBy': FieldValue.arrayRemove([user.uid]),
+      });
+
+      final messagesRef = dmRef.collection('messages');
 
       await messagesRef.add({
         'senderId': user.uid,
@@ -199,7 +203,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
         'readBy': [user.uid],
       });
 
-      await firestore.collection('direct_messages').doc(_chatId).update({
+      await dmRef.update({
         'lastMessage': text,
         'time': 'Now',
       });
@@ -460,9 +464,9 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
   }
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────
 // Message Bubble (adapted from GroupChatScreen)
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────
 class _MessageBubble extends StatelessWidget {
   final Message message;
   final String Function(DateTime) formatTime;
@@ -620,9 +624,9 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────
 // Message Input Bar
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────
 class _MessageInputBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
