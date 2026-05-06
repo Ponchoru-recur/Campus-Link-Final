@@ -82,6 +82,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       await firestore.collection('group_chats').doc(_chatId).update({
         'lastMessage': text,
         'time': 'Now',
+        'lastMessageAt': FieldValue.serverTimestamp(),
       });
 
       // Increment unreadCount for other members

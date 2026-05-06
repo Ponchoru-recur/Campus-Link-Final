@@ -214,6 +214,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
       await dmRef.update({
         'lastMessage': text,
         'time': 'Now',
+        'lastMessageAt': FieldValue.serverTimestamp(),
         'unreadCount.$_otherParticipantUid': FieldValue.increment(1),
       });
     } catch (e) {

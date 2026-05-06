@@ -9,7 +9,7 @@ class ChatItem {
   final ChatType type;
   final int unreadCount;
   final bool isOnline;
-  final Timestamp? createdAt;
+  final Timestamp? lastMessageAt;
 
   const ChatItem({
     required this.id,
@@ -19,8 +19,10 @@ class ChatItem {
     required this.type,
     this.unreadCount = 0,
     this.isOnline = false,
-    this.createdAt,
+    this.lastMessageAt,
   });
+
+  /// Sorts newest-first by lastMessageAt.
 }
 
 enum ChatType { groupChat, directMessage }

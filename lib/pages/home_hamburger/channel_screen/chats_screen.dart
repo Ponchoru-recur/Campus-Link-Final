@@ -196,13 +196,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
             time: data['time'] ?? 'Now',
             type: ChatType.groupChat,
             unreadCount: unreadCount,
-            createdAt: data['createdAt'] as Timestamp?,
+            lastMessageAt: data['lastMessageAt'] as Timestamp?,
           );
         }).toList()
           ..sort((a, b) {
-            final aTime = a.createdAt?.millisecondsSinceEpoch ?? 0;
-            final bTime = b.createdAt?.millisecondsSinceEpoch ?? 0;
-            return bTime.compareTo(aTime); // newest first
+            final aTime = a.lastMessageAt?.millisecondsSinceEpoch ?? 0;
+            final bTime = b.lastMessageAt?.millisecondsSinceEpoch ?? 0;
+            return bTime.compareTo(aTime);
           });
         setState(() {
           _groupChats = chats;
@@ -231,9 +231,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
           return DirectMessageItem.fromFirestore(doc, user.uid);
         }).toList()
           ..sort((a, b) {
-            final aTime = a.createdAt?.millisecondsSinceEpoch ?? 0;
-            final bTime = b.createdAt?.millisecondsSinceEpoch ?? 0;
-            return bTime.compareTo(aTime); // newest first
+            final aTime = a.lastMessageAt?.millisecondsSinceEpoch ?? 0;
+            final bTime = b.lastMessageAt?.millisecondsSinceEpoch ?? 0;
+            return bTime.compareTo(aTime);
           });
 
         setState(() {
@@ -419,7 +419,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                             'createdBy': user.uid,
                             'members': [user.uid],
                             'unreadCount': 0,
-                            'createdAt': FieldValue.serverTimestamp(),
+                            'lastMessageAt': FieldValue.serverTimestamp(),
                           });
                         }
                         if (mounted) Navigator.pop(dialogContext);
@@ -1008,7 +1008,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         'unreadCount': {currentUid: 0, userData['uid']: 0},
         'lastMessage': '',
         'time': 'Now',
-        'createdAt': Timestamp.now(),
+        'lastMessageAt': Timestamp.now(),
         'participantRoles': {
           currentUid: currentUserRole,
           userData['uid']: userData['role'] ?? 'student',

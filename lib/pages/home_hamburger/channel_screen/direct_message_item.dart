@@ -20,7 +20,7 @@ class DirectMessageItem {
   final int unreadCount;
   final ChatType type = ChatType.directMessage;
   final bool isArchivedByMe;
-  final Timestamp? createdAt;
+  final Timestamp? lastMessageAt;
 
   const DirectMessageItem({
     required this.id,
@@ -31,7 +31,7 @@ class DirectMessageItem {
     required this.time,
     this.unreadCount = 0,
     this.isArchivedByMe = false,
-    this.createdAt,
+    this.lastMessageAt,
   });
 
   /// Factory to create from Firestore doc + current user UID.
@@ -77,7 +77,7 @@ class DirectMessageItem {
           ? (data['unreadCount'][currentUserId] ?? 0)
           : 0,
       isArchivedByMe: isArchived,
-      createdAt: data['createdAt'] as Timestamp?,
+      lastMessageAt: data['lastMessageAt'] as Timestamp?,
     );
   }
 }
