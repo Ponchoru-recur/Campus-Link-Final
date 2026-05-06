@@ -19,6 +19,7 @@ class DirectMessageItem {
   final String time;
   final int unreadCount;
   final ChatType type = ChatType.directMessage;
+  final bool isArchivedByMe;
 
   const DirectMessageItem({
     required this.id,
@@ -28,6 +29,7 @@ class DirectMessageItem {
     required this.lastMessage,
     required this.time,
     this.unreadCount = 0,
+    this.isArchivedByMe = false,
   });
 
   /// Factory to create from Firestore doc + current user UID.
@@ -59,6 +61,9 @@ class DirectMessageItem {
       otherName = data['otherParticipantName'] ?? 'Unknown';
     }
 
+    final archivedBy = List<String>.from(data['archivedBy'] ?? []);
+    final isArchived = archivedBy.contains(currentUserId);
+
     return DirectMessageItem(
       id: doc.id,
       otherParticipantName: otherName,
@@ -69,6 +74,7 @@ class DirectMessageItem {
       unreadCount: (data['unreadCount'] is Map)
           ? (data['unreadCount'][currentUserId] ?? 0)
           : 0,
+      isArchivedByMe: isArchived,
     );
   }
 }
