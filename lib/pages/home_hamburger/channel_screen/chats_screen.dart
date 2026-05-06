@@ -49,6 +49,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
         .join(' ');
   }
 
+  int get _totalArchivedUnread => _archivedDMs.fold(0, (sum, dm) => sum + dm.unreadCount);
+
   @override
   void initState() {
     super.initState();
@@ -535,7 +537,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         child: Row(
           children: [
             Text(
-              'Archived (${_archivedDMs.length})',
+              'Archived ($_totalArchivedUnread unread)',
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -821,6 +823,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
               CreateGroupChatButton(onTap: _onCreateGroupChat),
             // ── Divider ──
             const Divider(height: 1, color: AppColors.divider),
+            // ── Archived Header ──
+            _buildArchivedHeader(),
+            // ── Archived DMs List ──
+            if (_showArchived)
+              ..._archivedDMs.map(
+                (dm) => DirectMessageTile(
+                  chat: dm,
+                  onTap: () => _openDirectMessage(dm),
+                  isArchived: true,
+                  onLongPress: () => _showArchiveDialog(dm, isArchived: true),
+                ),
+              ),
             // ── Direct Messages Header ──
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -854,18 +868,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       fontSize: 13,
                     ),
                   ),
-                ),
-              ),
-            // ── Archived Header ──
-            _buildArchivedHeader(),
-            // ── Archived DMs List ──
-            if (_showArchived)
-              ..._archivedDMs.map(
-                (dm) => DirectMessageTile(
-                  chat: dm,
-                  onTap: () => _openDirectMessage(dm),
-                  isArchived: true,
-                  onLongPress: () => _showArchiveDialog(dm, isArchived: true),
                 ),
               ),
             // ── Search Results (shown when searching) ──
