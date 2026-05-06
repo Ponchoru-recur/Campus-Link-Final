@@ -1,6 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_item.dart';
-import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_tile.dart';
 
 void main() {
   group('DirectMessageItem & DirectMessageTile Tests', () {

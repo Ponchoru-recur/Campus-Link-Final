@@ -443,7 +443,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   child: ListView.separated(
                     shrinkWrap: true,
                     itemCount: _firestoreMembers.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final member = _firestoreMembers[index];
                       final uid = member['uid'] as String;
@@ -987,7 +987,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     return ListView.separated(
       shrinkWrap: true,
       itemCount: results.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final entry = results[index];
         final msg = entry.value;
@@ -1395,4 +1395,3 @@ class _MessageInputBar extends StatelessWidget {
     );
   }
 }
-

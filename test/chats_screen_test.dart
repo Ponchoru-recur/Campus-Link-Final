@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:luminescence/pages/home_hamburger/channel_screen/chats_screen.dart';
 
 void main() {
   group('ChatsScreen Contact Search & Add Tests', () {

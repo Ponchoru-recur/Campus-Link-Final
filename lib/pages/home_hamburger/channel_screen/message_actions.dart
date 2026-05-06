@@ -132,7 +132,7 @@ void showEditHistory({
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: history.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final entry = history[history.length - 1 - index];
                 return Padding(

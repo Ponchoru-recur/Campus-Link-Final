@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_item.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/message.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/message_actions.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/message_edit_delete.dart';
 import 'package:luminescence/themes/app_colors.dart';
 
 /// The full conversation screen for a 1-on-1 DIRECT MESSAGE.
@@ -209,6 +212,163 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
     }
   }
 
+  Future<void> _handleMessageAction(BuildContext context, Message msg) async {
+    final canEdit = msg.isMe && isWithinEditWindow(msg.timestamp);
+    final canDelete = msg.isMe && isWithinEditWindow(msg.timestamp);
+    final action = await showMessageActions(
+      context: context,
+      canEdit: canEdit,
+      canDelete: canDelete,
+    );
+    switch (action) {
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: msg.text));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Message copied')),
+          );
+        }
+      case 'delete':
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete Message'),
+            content: const Text('Are you sure you want to delete this message?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true) await _deleteMessage(msg);
+      case 'edit':
+        await _editMessage(msg);
+    }
+  }
+
+  Future<void> _editMessage(Message msg) async {
+    final controller = TextEditingController(text: msg.text);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Message'),
+        content: TextField(
+          controller: controller,
+          maxLines: null,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'Edit your message...',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final newText = controller.text.trim();
+    if (newText.isEmpty || newText == msg.text) return;
+    try {
+      final ok = await editMessageWithHistory(
+        chatId: _chatId,
+        msg: msg,
+        newText: newText,
+        collection: 'direct_messages',
+      );
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Messages can only be edited within 60 minutes')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to edit: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteMessage(Message msg) async {
+    try {
+      await softDeleteMessage(
+        chatId: _chatId,
+        messageId: msg.id,
+        collection: 'direct_messages',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete: $e')),
+        );
+      }
+    }
+  }
+
+  void _showEditHistory(BuildContext context, Message msg) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Edit History',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            ...msg.editHistory.reversed.map((entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.text,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      Text(
+                        _formatTime(entry.editedAt),
+                        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                      ),
+                      const Divider(),
+                    ],
+                  ),
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _messagesSubscription?.cancel();
@@ -280,8 +440,12 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
                   message: msg,
                   formatTime: _formatTime,
                   uidToName: _uidToName,
-                  onTapEdited: null,
-                  onLongPress: null,
+                  onTapEdited: msg.isEdited && !msg.isDeleted
+                      ? () => _showEditHistory(context, msg)
+                      : null,
+                  onLongPress: msg.isMe && !msg.isDeleted
+                      ? () => _handleMessageAction(context, msg)
+                      : null,
                 );
               },
             ),

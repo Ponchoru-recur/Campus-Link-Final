@@ -12,9 +12,10 @@ bool isWithinEditWindow(DateTime timestamp, {int minutes = 60}) {
 Future<void> softDeleteMessage({
   required String chatId,
   required String messageId,
+  String collection = 'group_chats',
 }) async {
   await FirebaseFirestore.instance
-      .collection('group_chats')
+      .collection(collection)
       .doc(chatId)
       .collection('messages')
       .doc(messageId)
@@ -31,10 +32,11 @@ Future<bool> editMessageWithHistory({
   required String chatId,
   required Message msg,
   required String newText,
+  String collection = 'group_chats',
 }) async {
   if (!isWithinEditWindow(msg.timestamp)) return false;
   final msgRef = FirebaseFirestore.instance
-      .collection('group_chats')
+      .collection(collection)
       .doc(chatId)
       .collection('messages')
       .doc(msg.id);

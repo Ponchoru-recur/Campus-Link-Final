@@ -692,6 +692,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
               onDelete: () => _confirmAndDeleteGroupChat(chat),
             ),
           ),
+          // ── Create Group Chat Button (Faculty only) ──
+          if (_userRole == 'faculty' && !_isSearching)
+            CreateGroupChatButton(onTap: _onCreateGroupChat),
           // ── Divider ──
           const Divider(height: 1, color: AppColors.divider),
           // ── Direct Messages Header ──
@@ -814,9 +817,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
               ),
             ),
           ],
-          // ── Create Group Chat Button (Faculty only) ──
-          if (_userRole == 'faculty' && !_isSearching)
-            CreateGroupChatButton(onTap: _onCreateGroupChat),
           const SizedBox(height: 16),
         ],
       ),

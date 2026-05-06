@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:luminescence/pages/home_hamburger/channel_screen/individual_chat_screen.dart';
 
 void main() {
   group('IndividualChatScreen Tests', () {
