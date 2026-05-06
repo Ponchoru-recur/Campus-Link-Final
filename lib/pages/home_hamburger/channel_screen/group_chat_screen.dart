@@ -26,7 +26,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   final ScrollController _scrollController = ScrollController();
   late String _groupName;
   late String _chatId;
-  List<String> _otherMembers = [];
   bool _isAdmin = false;
   bool _isSelectionMode = false;
   final Set<String> _selectedMemberUids = {};
@@ -138,7 +137,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _chatId = widget.chat.id;
     _groupName = widget.chat.name;
     _checkAdminStatus();
-    _loadOtherMembers();
     _resetUnreadCount();
     _setupGroupStream();
     _setupMessagesStream();
@@ -169,24 +167,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       });
     } catch (e) {
       debugPrint('Error checking admin status: $e');
-    }
-  }
-
-  Future<void> _loadOtherMembers() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('group_chats')
-          .doc(_chatId)
-          .get();
-      if (!doc.exists) return;
-      final data = doc.data()!;
-      final members = List<String>.from(data['members'] ?? []);
-      final currentUid = FirebaseAuth.instance.currentUser?.uid;
-      setState(() {
-        _otherMembers = members.where((uid) => uid != currentUid).toList();
-      });
-    } catch (e) {
-      debugPrint('Error loading other members: $e');
     }
   }
 
