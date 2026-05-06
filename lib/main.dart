@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/roleSelection': (context) => RoleSelectionScreen(),
         '/login': (context) => LoginScreen(),
-        '/chatScreen': (context) => ChatsScreen(),
+        '/chatScreen': (context) => const ChatsScreen(),
       },
     );
   }
@@ -79,4 +79,3 @@ class AuthWrapper extends StatelessWidget {
     return VerifyEmailScreen(email: user.email, role: role);
   }
 }
-

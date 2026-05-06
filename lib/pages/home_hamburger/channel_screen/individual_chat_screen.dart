@@ -27,7 +27,7 @@ class IndividualChatScreen extends StatefulWidget {
     this.otherEmail,
     this.otherRole,
     this.chatId,
-  }) : assert(chat != null || (otherUid != null && chatId != null)),
+  }) : assert(chat != null || (otherUid != null && chatId != null),
         'Either chat or otherUid+chatId must be provided');
 
   @override
@@ -156,6 +156,14 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
     }
     try {
       await batch.commit();
+      // Reset unreadCount for current user after marking messages as read
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('direct_messages')
+            .doc(_chatId)
+            .update({'unreadCount.${user.uid}': 0});
+      }
     } catch (e) {
       debugPrint('Error marking DM messages as read: $e');
     } finally {
@@ -206,6 +214,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
       await dmRef.update({
         'lastMessage': text,
         'time': 'Now',
+        'unreadCount.$_otherParticipantUid': FieldValue.increment(1),
       });
     } catch (e) {
       if (mounted) {

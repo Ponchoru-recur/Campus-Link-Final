@@ -1,0 +1,129 @@
+<h2>Unread Message Indicators</h2>
+<p class="subtitle">Choose how unread group chats and DMs should look</p>
+
+<div class="section">
+  <h3>Current State (No Bold)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Chats List - Current</div>
+    <div class="mockup-body" style="padding: 12px;">
+      <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; align-items: center;">
+        <div style="width: 40px; height: 40px; border-radius: 50%; background: #4A90D9; margin-right: 12px;"></div>
+        <div style="flex: 1;">
+          <div style="display: flex; justify-content: space-between;">
+            <span style="font-weight: 600; font-size: 15px; color: #333;">CS 101 Study Group</span>
+            <span style="font-size: 12px; color: #888;">10:30 AM</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 13px; color: #888;">Hey, are you coming?</span>
+            <div style="background: #4A90D9; border-radius: 10px; padding: 2px 6px; margin-left: 8px;">
+              <span style="color: white; font-size: 11px; font-weight: bold;">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; align-items: center;">
+        <div style="width: 40px; height: 40px; border-radius: 50%; background: #999; margin-right: 12px;"></div>
+        <div style="flex: 1;">
+          <div style="display: flex; justify-content: space-between;">
+            <span style="font-weight: 600; font-size: 15px; color: #333;">John Smith</span>
+            <span style="font-size: 12px; color: #888;">9:15 AM</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 13px; color: #888;">Thanks for the help!</span>
+            <div style="background: #4A90D9; border-radius: 10px; padding: 2px 6px; margin-left: 8px;">
+              <span style="color: white; font-size: 11px; font-weight: bold;">1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Proposed Options</h3>
+  <div class="options">
+    <div class="option" data-choice="bold-name" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>Bold Name Only</h3>
+        <p>Only the chat/group name becomes bold when unread</p>
+        <div class="mockup" style="margin-top: 8px;">
+          <div class="mockup-body" style="padding: 12px;">
+            <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; align-items: center;">
+              <div style="width: 40px; height: 40px; border-radius: 50%; background: #4A90D9; margin-right: 12px;"></div>
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="font-weight: 700; font-size: 15px; color: #333;">CS 101 Study Group</span>
+                  <span style="font-size: 12px; color: #888;">10:30 AM</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 13px; color: #888;">Hey, are you coming?</span>
+                  <div style="background: #4A90D9; border-radius: 10px; padding: 2px 6px; margin-left: 8px;">
+                    <span style="color: white; font-size: 11px; font-weight: bold;">3</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="option" data-choice="bold-both" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>Bold Name + Last Message</h3>
+        <p>Both the name and last message are bold when unread</p>
+        <div class="mockup" style="margin-top: 8px;">
+          <div class="mockup-body" style="padding: 12px;">
+            <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; align-items: center;">
+              <div style="width: 40px; height: 40px; border-radius: 50%; background: #4A90D9; margin-right: 12px;"></div>
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="font-weight: 700; font-size: 15px; color: #333;">CS 101 Study Group</span>
+                  <span style="font-size: 12px; color: #888;">10:30 AM</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 13px; font-weight: 600; color: #555;">Hey, are you coming?</span>
+                  <div style="background: #4A90D9; border-radius: 10px; padding: 2px 6px; margin-left: 8px;">
+                    <span style="color: white; font-size: 11px; font-weight: bold;">3</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="option" data-choice="accent-color" onclick="toggleSelect(this)">
+      <div class="letter">C</div>
+      <div class="content">
+        <h3>Accent Color + Bold</h3>
+        <p>Bold text with primary color for unread items (like WhatsApp)</p>
+        <div class="mockup" style="margin-top: 8px;">
+          <div class="mockup-body" style="padding: 12px;">
+            <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; align-items: center;">
+              <div style="width: 40px; height: 40px; border-radius: 50%; background: #4A90D9; margin-right: 12px;"></div>
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="font-weight: 700; font-size: 15px; color: #4A90D9;">CS 101 Study Group</span>
+                  <span style="font-size: 12px; color: #4A90D9; font-weight: 600;">10:30 AM</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 13px; font-weight: 600; color: #4A90D9;">Hey, are you coming?</span>
+                  <div style="background: #4A90D9; border-radius: 10px; padding: 2px 6px; margin-left: 8px;">
+                    <span style="color: white; font-size: 11px; font-weight: bold;">3</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p><strong>Note:</strong> The counter badge (3, 1, etc.) already exists in the current code. This is about what gets bold/accented when unreadCount > 0.</p>
+</div>

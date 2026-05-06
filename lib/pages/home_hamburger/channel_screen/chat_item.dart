@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 /// Represents a single chat item in the Chats list.
 class ChatItem {
   final String id;
@@ -7,6 +9,7 @@ class ChatItem {
   final ChatType type;
   final int unreadCount;
   final bool isOnline;
+  final Timestamp? createdAt;
 
   const ChatItem({
     required this.id,
@@ -16,6 +19,7 @@ class ChatItem {
     required this.type,
     this.unreadCount = 0,
     this.isOnline = false,
+    this.createdAt,
   });
 }
 

@@ -180,25 +180,32 @@ class _ChatsScreenState extends State<ChatsScreen> {
         .listen(
       (snapshot) {
         if (_isDisposed || !mounted) return;
+        final chats = snapshot.docs.map((doc) {
+          final data = doc.data();
+          int unreadCount = 0;
+          final unreadData = data['unreadCount'];
+          if (unreadData is Map) {
+            unreadCount = unreadData[user.uid] ?? 0;
+          } else if (unreadData is int) {
+            unreadCount = unreadData;
+          }
+          return ChatItem(
+            id: doc.id,
+            name: data['name'] ?? '',
+            lastMessage: data['lastMessage'] ?? '',
+            time: data['time'] ?? 'Now',
+            type: ChatType.groupChat,
+            unreadCount: unreadCount,
+            createdAt: data['createdAt'] as Timestamp?,
+          );
+        }).toList()
+          ..sort((a, b) {
+            final aTime = a.createdAt?.millisecondsSinceEpoch ?? 0;
+            final bTime = b.createdAt?.millisecondsSinceEpoch ?? 0;
+            return bTime.compareTo(aTime); // newest first
+          });
         setState(() {
-          _groupChats = snapshot.docs.map((doc) {
-            final data = doc.data();
-            int unreadCount = 0;
-            final unreadData = data['unreadCount'];
-            if (unreadData is Map) {
-              unreadCount = unreadData[user.uid] ?? 0;
-            } else if (unreadData is int) {
-              unreadCount = unreadData;
-            }
-            return ChatItem(
-              id: doc.id,
-              name: data['name'] ?? '',
-              lastMessage: data['lastMessage'] ?? '',
-              time: data['time'] ?? 'Now',
-              type: ChatType.groupChat,
-              unreadCount: unreadCount,
-            );
-          }).toList();
+          _groupChats = chats;
         });
       },
       onError: (e) {
@@ -222,7 +229,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
         if (_isDisposed || !mounted) return;
         final allDMs = snapshot.docs.map((doc) {
           return DirectMessageItem.fromFirestore(doc, user.uid);
-        }).toList();
+        }).toList()
+          ..sort((a, b) {
+            final aTime = a.createdAt?.millisecondsSinceEpoch ?? 0;
+            final bTime = b.createdAt?.millisecondsSinceEpoch ?? 0;
+            return bTime.compareTo(aTime); // newest first
+          });
 
         setState(() {
           _directMessages = allDMs.where((dm) => !dm.isArchivedByMe).toList();
@@ -975,6 +987,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final dmDocId = _generateDmDocId(currentUid, userData['uid']);
     final dmRef = FirebaseFirestore.instance.collection('direct_messages').doc(dmDocId);
     final doc = await dmRef.get();
+    String snackBarText = 'Contact added';
 
     if (!doc.exists) {
       String currentUserRole = 'student';
@@ -1005,12 +1018,22 @@ class _ChatsScreenState extends State<ChatsScreen> {
           userData['uid']: userData['displayName'] ?? '',
         },
       });
+    } else {
+      // Doc exists — check if archived and unarchive if so
+      final data = doc.data() as Map<String, dynamic>;
+      final archivedBy = List<String>.from(data['archivedBy'] ?? []);
+      if (archivedBy.contains(currentUid)) {
+        await dmRef.update({
+          'archivedBy': FieldValue.arrayRemove([currentUid]),
+        });
+        snackBarText = 'Chat unarchived';
+      }
     }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Contact added'),
+        content: Text(snackBarText),
         backgroundColor: AppColors.successGreen,
       ),
     );

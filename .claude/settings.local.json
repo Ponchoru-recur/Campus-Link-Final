@@ -36,7 +36,12 @@
       "Bash(node __TRACKED_VAR__/.claude/get-shit-done/bin/gsd-tools.cjs state --raw)",
       "Bash(node *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(flutter test *)",
+      "Bash(Select-Object -First 50)",
+      "Bash(dart analyze *)",
+      "Bash(bash scripts/start-server.sh --project-dir \"C:\\\\Users\\\\Sam\\\\Desktop\\\\Knowledge Folder\\\\Flutter Shenanigans\\\\Final\\\\luminescence\")",
+      "mcp__plugin_context-mode_context-mode__ctx_search"
     ]
   }
 }
