@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chat_item.dart';
 import 'package:luminescence/themes/app_colors.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_tile.dart';
@@ -36,6 +37,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
   List<Map<String, dynamic>> _searchResults = [];
   List<DirectMessageItem> _archivedDMs = [];
   bool _showArchived = false;
+  final Set<String> _locallyUnreadGroupChatIds = {};
+  final Set<String> _locallyUnreadDMIds = {};
 
   String get _userEmail => FirebaseAuth.instance.currentUser?.email ?? '';
 
@@ -54,6 +57,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   @override
   void initState() {
     super.initState();
+    _loadUnreadState();
     _setupGroupChatsStream();
     _setupDirectMessagesStream();
     _fetchUserRole();
@@ -61,6 +65,36 @@ class _ChatsScreenState extends State<ChatsScreen> {
     _searchController.addListener(() {
       _filterSearch(_searchController.text);
     });
+  }
+
+  String? get _userId => FirebaseAuth.instance.currentUser?.uid;
+
+  String _prefsKey(String suffix) => 'unread_${_userId}_$suffix';
+
+  Future<void> _loadUnreadState() async {
+    final uid = _userId;
+    if (uid == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || _isDisposed) return;
+    setState(() {
+      _locallyUnreadGroupChatIds.clear();
+      _locallyUnreadGroupChatIds.addAll(
+          prefs.getStringList(_prefsKey('group_unread')) ?? []);
+      _locallyUnreadDMIds.clear();
+      _locallyUnreadDMIds.addAll(
+          prefs.getStringList(_prefsKey('dm_unread')) ?? []);
+    });
+  }
+
+  Future<void> _saveUnreadState() async {
+    if (_isDisposed) return;
+    final uid = _userId;
+    if (uid == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+        _prefsKey('group_unread'), _locallyUnreadGroupChatIds.toList());
+    await prefs.setStringList(
+        _prefsKey('dm_unread'), _locallyUnreadDMIds.toList());
   }
 
   void _fetchUserRole() async {
@@ -271,6 +305,30 @@ class _ChatsScreenState extends State<ChatsScreen> {
       context,
       MaterialPageRoute(builder: (_) => IndividualChatScreen(chat: chat)),
     );
+  }
+
+
+
+  void _toggleGroupChatUnread(ChatItem chat) {
+    setState(() {
+      if (_locallyUnreadGroupChatIds.contains(chat.id)) {
+        _locallyUnreadGroupChatIds.remove(chat.id);
+      } else {
+        _locallyUnreadGroupChatIds.add(chat.id);
+      }
+    });
+    _saveUnreadState();
+  }
+
+  void _toggleDMUnread(DirectMessageItem dm) {
+    setState(() {
+      if (_locallyUnreadDMIds.contains(dm.id)) {
+        _locallyUnreadDMIds.remove(dm.id);
+      } else {
+        _locallyUnreadDMIds.add(dm.id);
+      }
+    });
+    _saveUnreadState();
   }
 
   Future<void> _confirmAndDeleteGroupChat(ChatItem chat) async {
@@ -827,6 +885,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 chat: chat,
                 onTap: () => _openGroupChat(chat),
                 isFaculty: _userRole == 'faculty',
+                isLocallyUnread: _locallyUnreadGroupChatIds.contains(chat.id),
+                onMarkUnread: () => _toggleGroupChatUnread(chat),
                 onDelete: () => _confirmAndDeleteGroupChat(chat),
               ),
             ),
@@ -844,6 +904,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   chat: dm,
                   onTap: () => _openDirectMessage(dm),
                   isArchived: true,
+                  isLocallyUnread: _locallyUnreadDMIds.contains(dm.id),
+                  onMarkUnread: () => _toggleDMUnread(dm),
                   onLongPress: () => _showArchiveDialog(dm, isArchived: true),
                 ),
               ),
@@ -865,6 +927,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
               (dm) => DirectMessageTile(
                 chat: dm,
                 onTap: () => _openDirectMessage(dm),
+                isLocallyUnread: _locallyUnreadDMIds.contains(dm.id),
+                onMarkUnread: () => _toggleDMUnread(dm),
                 onLongPress: () => _showArchiveDialog(dm, isArchived: false),
               ),
             ),

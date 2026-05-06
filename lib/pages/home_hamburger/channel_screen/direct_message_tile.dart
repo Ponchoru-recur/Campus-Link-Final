@@ -12,15 +12,20 @@ class DirectMessageTile extends StatelessWidget {
     required this.chat,
     required this.onTap,
     this.isArchived = false,
+    this.isLocallyUnread = false,
     this.onLongPress,
+    this.onMarkUnread,
   });
 
   final bool isArchived;
+  final bool isLocallyUnread;
   final VoidCallback? onLongPress;
+  final VoidCallback? onMarkUnread;
 
   @override
   Widget build(BuildContext context) {
     final isFaculty = chat.otherParticipantRole == 'faculty';
+    final effectiveUnread = chat.unreadCount > 0 || isLocallyUnread;
     final avatarBg = isFaculty
         ? AppColors.instructorPurple.withValues(alpha: 0.15)
         : Colors.grey[400]!.withValues(alpha: 0.15);
@@ -54,9 +59,9 @@ class DirectMessageTile extends StatelessWidget {
               child: Text(
                 chat.otherParticipantName,
                 style: TextStyle(
-                  fontWeight: chat.unreadCount > 0 ? FontWeight.w700 : FontWeight.w600,
+                  fontWeight: effectiveUnread ? FontWeight.w700 : FontWeight.w600,
                   fontSize: 15,
-                  color: chat.unreadCount > 0 ? AppColors.primary : null,
+                  color: effectiveUnread ? AppColors.primary : null,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -86,8 +91,8 @@ class DirectMessageTile extends StatelessWidget {
           chat.lastMessage,
           style: TextStyle(
             fontSize: 13,
-            fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
-            color: chat.unreadCount > 0 ? AppColors.primary : AppColors.textSecondary,
+            fontWeight: effectiveUnread ? FontWeight.w600 : FontWeight.normal,
+            color: effectiveUnread ? AppColors.primary : AppColors.textSecondary,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -104,7 +109,7 @@ class DirectMessageTile extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            if (chat.unreadCount > 0)
+            if (effectiveUnread)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
@@ -112,7 +117,7 @@ class DirectMessageTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '${chat.unreadCount}',
+                  '${isLocallyUnread && chat.unreadCount == 0 ? 1 : chat.unreadCount}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 11,
@@ -123,9 +128,52 @@ class DirectMessageTile extends StatelessWidget {
           ],
         ),
         onTap: onTap,
-        onLongPress: onLongPress,
+        onLongPress: () => _showPopupMenu(context),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         dense: true,
+      ),
+    );
+  }
+
+  void _showPopupMenu(BuildContext context) {
+    final effectiveUnread = chat.unreadCount > 0 || isLocallyUnread;
+    showModalBottomSheet(
+      context: context,
+      builder: (bottomSheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: Icon(
+              effectiveUnread ? Icons.mark_email_read : Icons.mark_email_unread,
+              color: AppColors.primary,
+            ),
+            title: Text(
+              effectiveUnread ? 'Mark as read' : 'Mark as unread',
+            ),
+            onTap: () {
+              Navigator.pop(bottomSheetContext);
+              onMarkUnread?.call();
+            },
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Icon(
+              isArchived ? Icons.unarchive : Icons.archive,
+              color: isArchived ? AppColors.primary : AppColors.urgentRed,
+            ),
+            title: Text(
+              isArchived ? 'Unarchive' : 'Archive',
+              style: TextStyle(
+                color: isArchived ? null : AppColors.urgentRed,
+              ),
+            ),
+            onTap: () {
+              Navigator.pop(bottomSheetContext);
+              onLongPress?.call();
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

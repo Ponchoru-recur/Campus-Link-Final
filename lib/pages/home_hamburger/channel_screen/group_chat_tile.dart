@@ -9,6 +9,8 @@ class GroupChatTile extends StatelessWidget {
   final VoidCallback onTap;
   final bool isFaculty;
   final VoidCallback? onDelete;
+  final bool isLocallyUnread;
+  final VoidCallback? onMarkUnread;
 
   const GroupChatTile({
     super.key,
@@ -16,14 +18,16 @@ class GroupChatTile extends StatelessWidget {
     required this.onTap,
     this.isFaculty = false,
     this.onDelete,
+    this.isLocallyUnread = false,
+    this.onMarkUnread,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasUnread = chat.unreadCount > 0;
+    final effectiveUnread = chat.unreadCount > 0 || isLocallyUnread;
     return InkWell(
       onTap: onTap,
-      onLongPress: isFaculty ? () => _showPopupMenu(context) : null,
+      onLongPress: () => _showPopupMenu(context),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
@@ -37,9 +41,9 @@ class GroupChatTile extends StatelessWidget {
                   Text(
                     chat.name,
                     style: TextStyle(
-                      fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
+                      fontWeight: effectiveUnread ? FontWeight.w700 : FontWeight.w600,
                       fontSize: 15,
-                      color: hasUnread ? AppColors.primary : AppColors.textPrimary,
+                      color: effectiveUnread ? AppColors.primary : AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -47,8 +51,8 @@ class GroupChatTile extends StatelessWidget {
                     chat.lastMessage,
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
-                      color: hasUnread ? AppColors.primary : AppColors.textSecondary,
+                      fontWeight: effectiveUnread ? FontWeight.w600 : FontWeight.normal,
+                      color: effectiveUnread ? AppColors.primary : AppColors.textSecondary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -67,7 +71,7 @@ class GroupChatTile extends StatelessWidget {
                     color: AppColors.textSecondary,
                   ),
                 ),
-                if (hasUnread) ...[
+                if (effectiveUnread) ...[
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -76,7 +80,7 @@ class GroupChatTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      '${chat.unreadCount}',
+                      '${isLocallyUnread && chat.unreadCount == 0 ? 1 : chat.unreadCount}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 11,
@@ -94,22 +98,39 @@ class GroupChatTile extends StatelessWidget {
   }
 
   void _showPopupMenu(BuildContext context) {
+    final isUnread = chat.unreadCount > 0 || isLocallyUnread;
     showModalBottomSheet(
       context: context,
       builder: (bottomSheetContext) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            leading: Icon(Icons.delete, color: AppColors.urgentRed),
+            leading: Icon(
+              isUnread ? Icons.mark_email_read : Icons.mark_email_unread,
+              color: AppColors.primary,
+            ),
             title: Text(
-              'Delete',
-              style: TextStyle(color: AppColors.urgentRed),
+              isUnread ? 'Mark as read' : 'Mark as unread',
             ),
             onTap: () {
               Navigator.pop(bottomSheetContext);
-              onDelete?.call();
+              onMarkUnread?.call();
             },
           ),
+          if (isFaculty) ...[
+            const Divider(height: 1),
+            ListTile(
+              leading: Icon(Icons.delete, color: AppColors.urgentRed),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: AppColors.urgentRed),
+              ),
+              onTap: () {
+                Navigator.pop(bottomSheetContext);
+                onDelete?.call();
+              },
+            ),
+          ],
           const SizedBox(height: 8),
         ],
       ),

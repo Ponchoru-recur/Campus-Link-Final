@@ -41,7 +41,10 @@
       "Bash(Select-Object -First 50)",
       "Bash(dart analyze *)",
       "Bash(bash scripts/start-server.sh --project-dir \"C:\\\\Users\\\\Sam\\\\Desktop\\\\Knowledge Folder\\\\Flutter Shenanigans\\\\Final\\\\luminescence\")",
-      "mcp__plugin_context-mode_context-mode__ctx_search"
+      "mcp__plugin_context-mode_context-mode__ctx_search",
+      "Bash(Select-String -Pattern \"error \")",
+      "PowerShell(Set-Content *)",
+      "Bash(Select-Object -First 30)"
     ]
   }
 }
