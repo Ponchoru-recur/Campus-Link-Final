@@ -11,7 +11,10 @@ class DirectMessageTile extends StatelessWidget {
     super.key,
     required this.chat,
     required this.onTap,
+    this.isArchived = false,
   });
+
+  final bool isArchived;
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +27,7 @@ class DirectMessageTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
+        color: isArchived ? Colors.grey[100] : null,
         border: isFaculty
             ? const Border(
                 left: BorderSide(
