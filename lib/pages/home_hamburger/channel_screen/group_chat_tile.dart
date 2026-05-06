@@ -35,18 +35,19 @@ class GroupChatTile extends StatelessWidget {
                 children: [
                   Text(
                     chat.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
+                    style: TextStyle(
+                      fontWeight: chat.unreadCount > 0 ? FontWeight.w700 : FontWeight.w600,
                       fontSize: 15,
-                      color: AppColors.textPrimary,
+                      color: chat.unreadCount > 0 ? AppColors.primary : AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     chat.lastMessage,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: AppColors.textSecondary,
+                      fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
+                      color: chat.unreadCount > 0 ? AppColors.primary : AppColors.textSecondary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
