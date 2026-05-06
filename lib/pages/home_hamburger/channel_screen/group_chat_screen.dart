@@ -25,6 +25,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late String _groupName;
+  late String _chatId;
+  List<String> _otherMembers = [];
   bool _isAdmin = false;
   bool _isSelectionMode = false;
   final Set<String> _selectedMemberUids = {};
@@ -66,7 +68,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       final firestore = FirebaseFirestore.instance;
       final messagesRef = firestore
           .collection('group_chats')
-          .doc(widget.chat.id)
+          .doc(_chatId)
           .collection('messages');
 
       await messagesRef.add({
@@ -78,10 +80,42 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'readBy': [user.uid],
       });
 
-      await firestore.collection('group_chats').doc(widget.chat.id).update({
+      await firestore.collection('group_chats').doc(_chatId).update({
         'lastMessage': text,
         'time': 'Now',
       });
+
+      // Increment unreadCount for other members
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUid != null) {
+        final chatDoc = await firestore.collection('group_chats').doc(_chatId).get();
+        if (chatDoc.exists) {
+          final data = chatDoc.data()!;
+          final members = List<String>.from(data['members'] ?? []);
+          final unreadCount = data['unreadCount'];
+          Map<String, dynamic> updateMap = {};
+          if (unreadCount is Map) {
+            for (final uid in members) {
+              if (uid == currentUid) continue;
+              final currentCount = (unreadCount[uid] ?? 0) as int;
+              updateMap['unreadCount.$uid'] = currentCount + 1;
+            }
+          } else {
+            // Old format: initialize new map
+            updateMap['unreadCount'] = {};
+            for (final uid in members) {
+              if (uid == currentUid) {
+                updateMap['unreadCount.$uid'] = 0;
+              } else {
+                updateMap['unreadCount.$uid'] = 1;
+              }
+            }
+          }
+          if (updateMap.isNotEmpty) {
+            await firestore.collection('group_chats').doc(_chatId).update(updateMap);
+          }
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -101,8 +135,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   @override
   void initState() {
     super.initState();
+    _chatId = widget.chat.id;
     _groupName = widget.chat.name;
     _checkAdminStatus();
+    _loadOtherMembers();
+    _resetUnreadCount();
     _setupGroupStream();
     _setupMessagesStream();
     _loadMembers();
@@ -132,6 +169,45 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       });
     } catch (e) {
       debugPrint('Error checking admin status: $e');
+    }
+  }
+
+  Future<void> _loadOtherMembers() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('group_chats')
+          .doc(_chatId)
+          .get();
+      if (!doc.exists) return;
+      final data = doc.data()!;
+      final members = List<String>.from(data['members'] ?? []);
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      setState(() {
+        _otherMembers = members.where((uid) => uid != currentUid).toList();
+      });
+    } catch (e) {
+      debugPrint('Error loading other members: $e');
+    }
+  }
+
+  Future<void> _resetUnreadCount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('group_chats')
+          .doc(_chatId);
+      final doc = await docRef.get();
+      if (!doc.exists) return;
+      final data = doc.data()!;
+      final unreadCount = data['unreadCount'];
+      if (unreadCount is Map && (unreadCount[user.uid] ?? 0) > 0) {
+        await docRef.update({
+          'unreadCount.${user.uid}': 0,
+        });
+      }
+    } catch (e) {
+      debugPrint('Error resetting unread count: $e');
     }
   }
 
