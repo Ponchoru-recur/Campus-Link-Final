@@ -65,11 +65,11 @@ Add the ability to archive direct messages so the DM list doesn't get too long. 
 
 ## Auto-Unarchive Logic
 
-In `IndividualChatScreen` (or message send handler):
+In `lib/pages/home_hamburger/channel_screen/individual_chat_screen.dart` message send handler:
 
-- When a message is sent to a DM where `archivedBy` contains the sender's UID
-- Automatically call `update({ 'archivedBy': FieldValue.arrayRemove([senderUid]) })`
-- Real-time stream updates move it back to active list
+- When a message is sent, check if `archivedBy` contains the sender's UID
+- If yes, call `update({ 'archivedBy': FieldValue.arrayRemove([senderUid]) })` before sending
+- Real-time stream updates move it back to active list automatically
 
 ## Edge Cases
 
