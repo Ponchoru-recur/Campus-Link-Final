@@ -6,7 +6,7 @@
 
 4.Create Announcement
 
-5.Fake Gmail Flow
+5.Fake Gmail Flow (THIS WAS A TEST BEFORE / NO LONGER NEEDED)
 
 6.File upload/download UI
 
