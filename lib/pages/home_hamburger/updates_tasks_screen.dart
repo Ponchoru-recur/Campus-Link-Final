@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:luminescence/models/task.dart';
 import 'package:luminescence/themes/app_colors.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:luminescence/services/storage_service.dart';
+import 'package:file_picker/file_picker.dart';
 
 /// Updates & Tasks screen showing all tasks for the current user.
 /// Students can view and submit. Faculty can delete their own or ignore others'.
@@ -126,62 +128,163 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
     if (user == null) return;
     final name = await _getUserName(user);
     final controller = TextEditingController();
+    String? attachedFilePath;
+    String? attachedFileName;
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Submit to Task'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(task.description,
-                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              maxLines: 4,
-              minLines: 2,
-              decoration: InputDecoration(
-                hintText: 'Your reply (optional)...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.all(14),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Submit to Task'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(task.description,
+                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                  const SizedBox(height: 16),
+                  if (task.deadline != null) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today, size: 14, color: _isOverdue(task) ? AppColors.urgentRed : Colors.grey[600]),
+                        const SizedBox(width: 6),
+                        Text(
+                          _isOverdue(task) ? 'Deadline has passed' : 'Due: ${_formatDate(task.deadline)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _isOverdue(task) ? AppColors.urgentRed : Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  TextField(
+                    controller: controller,
+                    maxLines: 4,
+                    minLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Your reply (optional)...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.all(14),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () async {
+                          try {
+                            final pickResult = await FilePicker.platform.pickFiles(
+                              allowMultiple: false,
+                              withData: false,
+                            );
+                            if (pickResult != null && pickResult.files.isNotEmpty) {
+                              setState(() {
+                                attachedFilePath = pickResult.files.first.path;
+                                attachedFileName = pickResult.files.first.name;
+                              });
+                            }
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Failed to pick file: $e')),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.attach_file, size: 16),
+                        label: Text(
+                          attachedFileName ?? 'Attach File',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      if (attachedFileName != null) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            attachedFileName!,
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 14),
+                          onPressed: () => setState(() {
+                            attachedFilePath = null;
+                            attachedFileName = null;
+                          }),
+                          splashRadius: 14,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(dialogContext, {
+                  'textReply': controller.text.trim(),
+                  'filePath': attachedFilePath,
+                  'fileName': attachedFileName,
+                }),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Submit'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, {
-              'textReply': controller.text.trim(),
-            }),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Submit'),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
     if (result == null) return;
+
     try {
+      // Server-side deadline check
+      if (task.deadline != null && task.deadline!.isBefore(DateTime.now())) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Deadline has passed. Submissions are closed.')),
+          );
+        }
+        return;
+      }
+
+      String? fileUrl;
+      if (result['filePath'] != null) {
+        final storageService = StorageService();
+        fileUrl = await storageService.uploadSubmissionFile(
+          taskId: task.id,
+          studentUid: user.uid,
+          filePath: result['filePath'],
+          fileName: result['fileName'] ?? 'submission',
+        );
+      }
+
       final submission = TaskSubmission(
         studentUid: user.uid,
         studentName: name,
         textReply: result['textReply']?.isNotEmpty == true ? result['textReply'] : null,
+        fileUrl: fileUrl,
+        fileName: fileUrl != null ? result['fileName'] : null,
         submittedAt: DateTime.now(),
       );
+
       await FirebaseFirestore.instance
           .collection('tasks')
           .doc(task.id)
           .update({
         'submissions': FieldValue.arrayUnion([submission.toMap()]),
       });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Submitted!')),
@@ -278,7 +381,7 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: _tasks.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final task = _tasks[index];
                     final isCreator = task.createdBy == _userId;
@@ -630,7 +733,7 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: task.submissions.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, i) {
                     final sub = task.submissions[i];
                     return ListTile(

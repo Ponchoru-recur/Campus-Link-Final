@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:luminescence/models/task.dart';
 import 'package:luminescence/themes/app_colors.dart';
+import 'package:luminescence/services/storage_service.dart';
 import 'package:file_picker/file_picker.dart';
 
 /// Modal dialog for faculty to create a task inside a chat.
@@ -27,10 +28,14 @@ class TaskCreationDialog extends StatefulWidget {
 
 class _TaskCreationDialogState extends State<TaskCreationDialog> {
   final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
   final _descController = TextEditingController();
   DateTime? _deadline;
   bool _allowSubmissions = false;
   final List<TaskAttachment> _attachments = [];
+  final _storageService = StorageService();
+  // Store pending attachments with their local file paths for upload during task creation
+  final List<Map<String, String>> _pendingAttachments = []; // {name, path, mimeType}
   bool _isSaving = false;
 
   String _getCurrentUserName() {
@@ -84,12 +89,18 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
       );
       if (result == null || result.files.isEmpty) return;
       final file = result.files.first;
+      if (file.path == null) return;
       setState(() {
         _attachments.add(TaskAttachment(
           fileName: file.name,
-          fileUrl: file.path ?? '', // Will be replaced with actual URL after upload
+          fileUrl: '', // Will be set after upload during task creation
           mimeType: file.extension != null ? 'application/${file.extension}' : null,
         ));
+        _pendingAttachments.add({
+          'name': file.name,
+          'path': file.path!,
+          'mimeType': file.extension != null ? 'application/${file.extension}' : '',
+        });
       });
     } catch (e) {
       if (mounted) {
@@ -103,6 +114,9 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
   void _removeAttachment(int index) {
     setState(() {
       _attachments.removeAt(index);
+      if (index < _pendingAttachments.length) {
+        _pendingAttachments.removeAt(index);
+      }
     });
   }
 
@@ -115,6 +129,30 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
       if (user == null) return;
       final userName = _getCurrentUserName();
       final taskId = FirebaseFirestore.instance.collection('tasks').doc().id;
+
+      // Upload pending attachments to Firebase Storage with real taskId
+      final List<TaskAttachment> uploadedAttachments = [];
+      for (var i = 0; i < _pendingAttachments.length; i++) {
+        final pending = _pendingAttachments[i];
+        try {
+          final url = await _storageService.uploadTaskAttachment(
+            taskId: taskId,
+            filePath: pending['path']!,
+            fileName: pending['name']!,
+          );
+          uploadedAttachments.add(TaskAttachment(
+            fileName: pending['name']!,
+            fileUrl: url,
+            mimeType: pending['mimeType']!.isNotEmpty ? pending['mimeType'] : null,
+          ));
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to upload ${pending['name']}: $e')),
+            );
+          }
+        }
+      }
 
       // Fetch target UIDs
       List<String> targetUids = [user.uid];
@@ -136,7 +174,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
 
       final task = Task(
         id: taskId,
-        title: _descController.text.trim(),
+        title: _titleController.text.trim(),
         description: _descController.text.trim(),
         createdBy: user.uid,
         creatorName: userName,
@@ -145,7 +183,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
         createdAt: DateTime.now(),
         deadline: _deadline,
         allowSubmissions: _allowSubmissions,
-        attachments: _attachments,
+        attachments: uploadedAttachments,
         targetUids: targetUids,
       );
 
@@ -178,7 +216,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
           ? ' (Due: ${_deadline!.month}/${_deadline!.day}/${_deadline!.year})'
           : '';
       await chatRef.update({
-        'lastMessage': '📋 Task: ${_descController.text.trim().substring(0, _descController.text.trim().length > 50 ? 50 : _descController.text.trim().length)}${_descController.text.trim().length > 50 ? '...' : ''}$deadlineStr',
+        'lastMessage': '📋 Task: ${_titleController.text.trim().substring(0, _titleController.text.trim().length > 50 ? 50 : _titleController.text.trim().length)}${_titleController.text.trim().length > 50 ? '...' : ''}$deadlineStr',
         'time': 'Now',
         'lastMessageAt': FieldValue.serverTimestamp(),
       });
@@ -228,6 +266,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
 
   @override
   void dispose() {
+    _titleController.dispose();
     _descController.dispose();
     super.dispose();
   }
@@ -280,7 +319,28 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
                 ),
                 const SizedBox(height: 20),
 
-                // Description / Title
+                // Title
+                const Text('Task Title',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _titleController,
+                  maxLength: 100,
+                  decoration: InputDecoration(
+                    hintText: 'Enter task title...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.all(14),
+                    counterText: '',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Title is required';
+                    if (v.trim().length < 3) return 'Must be at least 3 characters';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Description
                 const Text('Task Description',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                 const SizedBox(height: 8),
@@ -366,7 +426,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: _attachments.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, i) {
                         final a = _attachments[i];
                         return ListTile(
