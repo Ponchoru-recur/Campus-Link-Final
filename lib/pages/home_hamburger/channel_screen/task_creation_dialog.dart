@@ -27,6 +27,7 @@ class TaskCreationDialog extends StatefulWidget {
 
 class _TaskCreationDialogState extends State<TaskCreationDialog> {
   final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
   final _descController = TextEditingController();
   DateTime? _deadline;
   bool _allowSubmissions = false;
@@ -136,7 +137,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
 
       final task = Task(
         id: taskId,
-        title: _descController.text.trim(),
+        title: _titleController.text.trim(),
         description: _descController.text.trim(),
         createdBy: user.uid,
         creatorName: userName,
@@ -178,7 +179,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
           ? ' (Due: ${_deadline!.month}/${_deadline!.day}/${_deadline!.year})'
           : '';
       await chatRef.update({
-        'lastMessage': '📋 Task: ${_descController.text.trim().substring(0, _descController.text.trim().length > 50 ? 50 : _descController.text.trim().length)}${_descController.text.trim().length > 50 ? '...' : ''}$deadlineStr',
+        'lastMessage': '📋 Task: ${_titleController.text.trim().substring(0, _titleController.text.trim().length > 50 ? 50 : _titleController.text.trim().length)}${_titleController.text.trim().length > 50 ? '...' : ''}$deadlineStr',
         'time': 'Now',
         'lastMessageAt': FieldValue.serverTimestamp(),
       });
@@ -228,6 +229,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
 
   @override
   void dispose() {
+    _titleController.dispose();
     _descController.dispose();
     super.dispose();
   }
@@ -280,7 +282,28 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
                 ),
                 const SizedBox(height: 20),
 
-                // Description / Title
+                // Title
+                const Text('Task Title',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _titleController,
+                  maxLength: 100,
+                  decoration: InputDecoration(
+                    hintText: 'Enter task title...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.all(14),
+                    counterText: '',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Title is required';
+                    if (v.trim().length < 3) return 'Must be at least 3 characters';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Description
                 const Text('Task Description',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                 const SizedBox(height: 8),
@@ -366,7 +389,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: _attachments.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, i) {
                         final a = _attachments[i];
                         return ListTile(
