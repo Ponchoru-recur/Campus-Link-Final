@@ -10,6 +10,10 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/chat_avatars.da
 import 'package:luminescence/pages/home_hamburger/channel_screen/message_actions.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/message_edit_delete.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/task_creation_dialog.dart';
+import 'package:luminescence/models/task.dart';
+import 'package:luminescence/services/storage_service.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// The full conversation screen for a GROUP CHAT.
 /// Edit this file to change how group chat conversations look and behave.
@@ -136,6 +140,196 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         chatName: _groupName,
       ),
     );
+  }
+
+  Future<void> _submitToTaskFromChat(BuildContext context, String taskId) async {
+    if (taskId.isEmpty) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Fetch task from Firestore
+    final taskDoc = await FirebaseFirestore.instance
+        .collection('tasks')
+        .doc(taskId)
+        .get();
+    if (!taskDoc.exists) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task not found')),
+        );
+      }
+      return;
+    }
+    final task = Task.fromFirestore(taskDoc);
+
+    // Server-side deadline check
+    if (task.deadline != null && task.deadline!.isBefore(DateTime.now())) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Deadline has passed. Submissions are closed.')),
+        );
+      }
+      return;
+    }
+
+    final name = await _getCurrentUserName();
+    final controller = TextEditingController();
+    String? attachedFilePath;
+    String? attachedFileName;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Submit to Task'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(task.description,
+                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                  const SizedBox(height: 16),
+                  if (task.deadline != null) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Due: ${task.deadline!.month}/${task.deadline!.day}/${task.deadline!.year}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  TextField(
+                    controller: controller,
+                    maxLines: 4,
+                    minLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Your reply (optional)...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.all(14),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () async {
+                          try {
+                            final pickResult = await FilePicker.platform.pickFiles(
+                              allowMultiple: false,
+                              withData: false,
+                            );
+                            if (pickResult != null && pickResult.files.isNotEmpty) {
+                              setState(() {
+                                attachedFilePath = pickResult.files.first.path;
+                                attachedFileName = pickResult.files.first.name;
+                              });
+                            }
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Failed to pick file: $e')),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.attach_file, size: 16),
+                        label: Text(
+                          attachedFileName ?? 'Attach File',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      if (attachedFileName != null) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            attachedFileName!,
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 14),
+                          onPressed: () => setState(() {
+                            attachedFilePath = null;
+                            attachedFileName = null;
+                          }),
+                          splashRadius: 14,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(dialogContext, {
+                  'textReply': controller.text.trim(),
+                  'filePath': attachedFilePath,
+                  'fileName': attachedFileName,
+                }),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Submit'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (result == null) return;
+
+    try {
+      String? fileUrl;
+      if (result['filePath'] != null) {
+        final storageService = StorageService();
+        fileUrl = await storageService.uploadSubmissionFile(
+          taskId: task.id,
+          studentUid: user.uid,
+          filePath: result['filePath'],
+          fileName: result['fileName'] ?? 'submission',
+        );
+      }
+
+      final submission = TaskSubmission(
+        studentUid: user.uid,
+        studentName: name,
+        textReply: result['textReply']?.isNotEmpty == true ? result['textReply'] : null,
+        fileUrl: fileUrl,
+        fileName: fileUrl != null ? result['fileName'] : null,
+        submittedAt: DateTime.now(),
+      );
+
+      await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(task.id)
+          .update({
+        'submissions': FieldValue.arrayUnion([submission.toMap()]),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Submitted!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e')),
+        );
+      }
+    }
   }
 
   String _formatTime(DateTime dt) {
@@ -266,6 +460,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             type: data['type'],
             readBy: List<String>.from(data['readBy'] ?? []),
             editHistory: editHistory,
+            taskId: data['taskId'],
             isDeleted: data['isDeleted'] ?? false,
           ));
         }
@@ -1166,6 +1361,16 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final msg = _messages[index];
+                if (msg.type == 'task' || msg.type == 'task_updated' || msg.type == 'task_deleted') {
+                  return _TaskBubble(
+                    message: msg,
+                    formatTime: _formatTime,
+                    isFaculty: _isFaculty,
+                    onTapSubmit: msg.type == 'task' && !_isFaculty
+                        ? () => _submitToTaskFromChat(context, msg.taskId ?? '')
+                        : null,
+                  );
+                }
                 return _MessageBubble(
                   message: msg,
                   formatTime: _formatTime,
@@ -1260,13 +1465,8 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTask = message.type == 'task';
     final isMe = message.isMe;
     final isSystem = message.type == 'system';
-
-    if (isTask) {
-      return _TaskBubble(message: message, formatTime: formatTime);
-    }
 
     if (isSystem) {
       return Padding(
@@ -1422,12 +1622,21 @@ class _MessageBubble extends StatelessWidget {
 class _TaskBubble extends StatelessWidget {
   final Message message;
   final String Function(DateTime) formatTime;
+  final bool isFaculty;
+  final VoidCallback? onTapSubmit;
 
-  const _TaskBubble({required this.message, required this.formatTime});
+  const _TaskBubble({
+    required this.message,
+    required this.formatTime,
+    this.isFaculty = false,
+    this.onTapSubmit,
+  });
 
   @override
   Widget build(BuildContext context) {
     final isMe = message.isMe;
+    final isDeleted = message.type == 'task_deleted';
+    final isUpdated = message.type == 'task_updated';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -1448,14 +1657,22 @@ class _TaskBubble extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: isMe ? AppColors.primary.withValues(alpha: 0.08) : const Color(0xFFF0F0F0),
+                color: isDeleted
+                    ? Colors.grey.withValues(alpha: 0.1)
+                    : isMe
+                        ? AppColors.primary.withValues(alpha: 0.08)
+                        : const Color(0xFFF0F0F0),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
                   topRight: const Radius.circular(16),
                   bottomLeft: Radius.circular(isMe ? 16 : 4),
                   bottomRight: Radius.circular(isMe ? 4 : 16),
                 ),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1),
+                border: Border.all(
+                    color: isDeleted
+                        ? Colors.grey.withValues(alpha: 0.3)
+                        : AppColors.primary.withValues(alpha: 0.3),
+                    width: 1),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1465,30 +1682,100 @@ class _TaskBubble extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
+                          color: isDeleted
+                              ? Colors.grey.withValues(alpha: 0.2)
+                              : isUpdated
+                                  ? AppColors.primary.withValues(alpha: 0.1)
+                                  : AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.assignment, color: AppColors.primary, size: 18),
+                        child: Icon(
+                            isDeleted
+                                ? Icons.cancel_outlined
+                                : isUpdated
+                                    ? Icons.edit
+                                    : Icons.assignment,
+                            color: isDeleted
+                                ? Colors.grey
+                                : AppColors.primary,
+                            size: 18),
                       ),
                       const SizedBox(width: 10),
-                      const Text('TASK', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.primary, letterSpacing: 1)),
+                      if (isDeleted)
+                        const Text('DELETED',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey,
+                                letterSpacing: 1))
+                      else if (isUpdated)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('Updated',
+                              style: TextStyle(
+                                  fontSize: 11, color: AppColors.primary)),
+                        )
+                      else
+                        const Text('TASK',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                                letterSpacing: 1)),
                     ],
                   ),
                   const SizedBox(height: 10),
                   if (!isMe)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(message.senderName, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+                      child: Text(message.senderName, style: TextStyle(
+                          fontSize: 11,
+                          color: isDeleted
+                              ? Colors.grey
+                              : AppColors.textSecondary,
+                          fontWeight: FontWeight.w600)),
                     ),
-                  Text(message.text, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+                  Text(
+                    message.text,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDeleted ? Colors.grey : AppColors.textPrimary,
+                      decoration: isDeleted
+                          ? TextDecoration.lineThrough
+                          : TextDecoration.none,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
+                      Icon(isDeleted ? Icons.cancel_outlined : Icons.access_time,
+                          size: 14, color: Colors.grey[600]),
                       const SizedBox(width: 4),
                       Text(formatTime(message.timestamp), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                     ],
                   ),
+                  if (!isMe && !isDeleted && message.type == 'task' && !isFaculty && onTapSubmit != null) ...[
+                    const SizedBox(height: 8),
+                    Builder(
+                      builder: (context) => ElevatedButton.icon(
+                        onPressed: () => onTapSubmit?.call(),
+                        icon: const Icon(Icons.send, size: 14),
+                        label: const Text('Submit'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          textStyle: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -18,6 +18,9 @@ class Task {
   final bool isActive; // false if faculty deleted/ignored it
   final List<String> targetUids; // UIDs of users who should see this task
   final List<String> ignoredBy; // Faculty who tapped out
+  final DateTime? updatedAt;
+  final String? updatedBy;
+  final List<TaskUpdate> updateHistory;
 
   const Task({
     required this.id,
@@ -35,6 +38,9 @@ class Task {
     this.isActive = true,
     this.targetUids = const [],
     this.ignoredBy = const [],
+    this.updatedAt,
+    this.updatedBy,
+    this.updateHistory = const [],
   });
 
   factory Task.fromFirestore(DocumentSnapshot doc) {
@@ -133,5 +139,57 @@ class TaskSubmission {
         if (fileUrl != null) 'fileUrl': fileUrl,
         if (fileName != null) 'fileName': fileName,
         'submittedAt': submittedAt,
+      };
+}
+
+class TaskUpdate {
+  final String updatedBy;
+  final DateTime updatedAt;
+  final String? oldTitle;
+  final String? newTitle;
+  final String? oldDescription;
+  final String? newDescription;
+  final DateTime? oldDeadline;
+  final DateTime? newDeadline;
+  final bool? oldAllowSubmissions;
+  final bool? newAllowSubmissions;
+
+  const TaskUpdate({
+    required this.updatedBy,
+    required this.updatedAt,
+    this.oldTitle,
+    this.newTitle,
+    this.oldDescription,
+    this.newDescription,
+    this.oldDeadline,
+    this.newDeadline,
+    this.oldAllowSubmissions,
+    this.newAllowSubmissions,
+  });
+
+  factory TaskUpdate.fromMap(Map<String, dynamic> m) => TaskUpdate(
+        updatedBy: m['updatedBy'] ?? '',
+        updatedAt: (m['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        oldTitle: m['oldTitle'],
+        newTitle: m['newTitle'],
+        oldDescription: m['oldDescription'],
+        newDescription: m['newDescription'],
+        oldDeadline: (m['oldDeadline'] as Timestamp?)?.toDate(),
+        newDeadline: (m['newDeadline'] as Timestamp?)?.toDate(),
+        oldAllowSubmissions: m['oldAllowSubmissions'],
+        newAllowSubmissions: m['newAllowSubmissions'],
+      );
+
+  Map<String, dynamic> toMap() => {
+        'updatedBy': updatedBy,
+        'updatedAt': updatedAt,
+        if (oldTitle != null) 'oldTitle': oldTitle,
+        if (newTitle != null) 'newTitle': newTitle,
+        if (oldDescription != null) 'oldDescription': oldDescription,
+        if (newDescription != null) 'newDescription': newDescription,
+        if (oldDeadline != null) 'oldDeadline': oldDeadline,
+        if (newDeadline != null) 'newDeadline': newDeadline,
+        if (oldAllowSubmissions != null) 'oldAllowSubmissions': oldAllowSubmissions,
+        if (newAllowSubmissions != null) 'newAllowSubmissions': newAllowSubmissions,
       };
 }

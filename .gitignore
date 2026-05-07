@@ -46,3 +46,6 @@ app.*.map.json
 
 # Temp directory
 temp/
+
+# Claude worktrees
+.claude/worktrees/

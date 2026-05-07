@@ -80,11 +80,63 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
   }
 
   Future<void> _deleteTask(Task task) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete Task'),
+            content: const Text(
+                'Delete this task for everyone? It will appear crossed out in chat.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: AppColors.urgentRed),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ?? false;
+    if (!confirmed) return;
+
     try {
       await FirebaseFirestore.instance
           .collection('tasks')
           .doc(task.id)
           .update({'isActive': false});
+
+      // Send deletion message to chat
+      final messagesRef = task.chatType == 'group'
+          ? FirebaseFirestore.instance
+              .collection('group_chats')
+              .doc(task.chatId)
+              .collection('messages')
+          : FirebaseFirestore.instance
+              .collection('direct_messages')
+              .doc(task.chatId)
+              .collection('messages');
+
+      final chatRef = task.chatType == 'group'
+          ? FirebaseFirestore.instance.collection('group_chats').doc(task.chatId)
+          : FirebaseFirestore.instance.collection('direct_messages').doc(task.chatId);
+
+      await messagesRef.add({
+        'senderId': _userId ?? '',
+        'senderName': task.creatorName,
+        'text': 'Task deleted: ${task.title}',
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'task_deleted',
+        'taskId': task.id,
+        'readBy': [_userId ?? ''],
+      });
+
+      await chatRef.update({
+        'lastMessage': 'Task deleted: ${task.title.substring(0, task.title.length > 50 ? 50 : task.title.length)}${task.title.length > 50 ? '...' : ''}',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+      });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Task deleted')),
@@ -586,25 +638,54 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
                             child: Row(
                               children: [
                                 if (!isFaculty &&
-                                    task.allowSubmissions)
+                                    task.allowSubmissions) ...[
                                   Expanded(
-                                    child: ElevatedButton.icon(
-                                      onPressed: () =>
-                                          _submitToTask(task),
-                                      icon: const Icon(Icons.send, size: 16),
-                                      label: const Text('Submit'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.primary,
-                                        foregroundColor: Colors.white,
+                                    child: _isOverdue(task)
+                                        ? Container(
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
+                                            alignment: Alignment.center,
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(Icons.lock_clock,
+                                                    size: 14, color: AppColors.urgentRed),
+                                                const SizedBox(width: 6),
+                                                const Text('Deadline Passed',
+                                                    style: TextStyle(
+                                                        fontSize: 13,
+                                                        color: AppColors.urgentRed,
+                                                        fontWeight: FontWeight.w500)),
+                                              ],
+                                            ),
+                                          )
+                                        : ElevatedButton.icon(
+                                            onPressed: () => _submitToTask(task),
+                                            icon: const Icon(Icons.send, size: 16),
+                                            label: const Text('Submit'),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: AppColors.primary,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(10)),
+                                              padding: const EdgeInsets.symmetric(vertical: 10),
+                                            ),
+                                          ),
+                                  ),
+                                ],
+                                if (isFaculty && isCreator) ...[
+                                  Expanded(
+                                    child: TextButton.icon(
+                                      onPressed: () => _editTask(task),
+                                      icon: const Icon(Icons.edit_outlined, size: 16),
+                                      label: const Text('Edit'),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: AppColors.primary,
                                         shape: RoundedRectangleBorder(
                                             borderRadius:
                                                 BorderRadius.circular(10)),
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 10),
                                       ),
                                     ),
                                   ),
-                                if (isFaculty && isCreator)
                                   Expanded(
                                     child: TextButton.icon(
                                       onPressed: () =>
@@ -620,6 +701,7 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
                                       ),
                                     ),
                                   ),
+                                ],
                                 if (isFaculty && !isCreator) ...[
                                   Expanded(
                                     child: TextButton.icon(
@@ -688,6 +770,201 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
         false;
     if (confirmed) await _deleteTask(task);
   }
+
+
+  Future<void> _editTask(Task task) async {
+    if (_userRole != 'faculty' || task.createdBy != _userId) return;
+
+    final titleController = TextEditingController(text: task.title);
+    final descController = TextEditingController(text: task.description);
+    DateTime? deadline = task.deadline;
+    bool allowSubmissions = task.allowSubmissions;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Edit Task'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Title', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: titleController,
+                  maxLength: 100,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.all(14),
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text('Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: descController,
+                  maxLines: 4,
+                  minLines: 2,
+                  maxLength: 500,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.all(14),
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today, size: 18, color: Colors.grey[600]),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: deadline ?? DateTime.now().add(const Duration(days: 1)),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (picked != null) {
+                          final time = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.now(),
+                          );
+                          if (time != null) {
+                            setState(() => deadline = DateTime(
+                                picked.year, picked.month, picked.day, time.hour, time.minute));
+                          }
+                        }
+                      },
+                      child: Text(
+                        deadline == null
+                            ? 'Set deadline'
+                            : 'Due: ${deadline!.month}/${deadline!.day}/${deadline!.year}',
+                        style: const TextStyle(color: AppColors.primary),
+                      ),
+                    ),
+                    if (deadline != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: () => setState(() => deadline = null),
+                      ),
+                  ],
+                ),
+                CheckboxListTile(
+                  value: allowSubmissions,
+                  onChanged: (v) => setState(() => allowSubmissions = v ?? false),
+                  title: const Text('Allow submissions', style: TextStyle(fontSize: 14)),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != true) return;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final update = TaskUpdate(
+        updatedBy: user.uid,
+        updatedAt: DateTime.now(),
+        oldTitle: task.title,
+        newTitle: titleController.text.trim() != task.title ? titleController.text.trim() : null,
+        oldDescription: task.description,
+        newDescription: descController.text.trim() != task.description
+            ? descController.text.trim()
+            : null,
+        oldDeadline: task.deadline,
+        newDeadline: deadline != task.deadline ? deadline : null,
+        oldAllowSubmissions: task.allowSubmissions,
+        newAllowSubmissions: allowSubmissions != task.allowSubmissions
+            ? allowSubmissions
+            : null,
+      );
+
+      final updateMap = <String, dynamic>{
+        'title': titleController.text.trim(),
+        'description': descController.text.trim(),
+        'updatedAt': DateTime.now(),
+        'updatedBy': user.uid,
+        'updateHistory': FieldValue.arrayUnion([update.toMap()]),
+      };
+      if (deadline != task.deadline) updateMap['deadline'] = deadline;
+      if (allowSubmissions != task.allowSubmissions) {
+        updateMap['allowSubmissions'] = allowSubmissions;
+      }
+
+      await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(task.id)
+          .update(updateMap);
+
+      // Send edit notification to chat
+      final chatRef = task.chatType == 'group'
+          ? FirebaseFirestore.instance.collection('group_chats').doc(task.chatId)
+          : FirebaseFirestore.instance.collection('direct_messages').doc(task.chatId);
+
+      final messagesRef = task.chatType == 'group'
+          ? chatRef.collection('messages')
+          : FirebaseFirestore.instance
+              .collection('direct_messages')
+              .doc(task.chatId)
+              .collection('messages');
+
+      await messagesRef.add({
+        'senderId': user.uid,
+        'senderName': task.creatorName,
+        'text': 'Task updated: ${titleController.text.trim()}',
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'task_updated',
+        'taskId': task.id,
+        'readBy': [user.uid],
+      });
+
+      // Update last message
+      final titleTrimmed = titleController.text.trim();
+      await chatRef.update({
+        'lastMessage': 'Task updated: ${titleTrimmed.substring(0, titleTrimmed.length > 50 ? 50 : titleTrimmed.length)}${titleTrimmed.length > 50 ? '...' : ''}',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task updated!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e')),
+        );
+      }
+    }
+  }
+
 
   void _showSubmissions(Task task) {
     showModalBottomSheet(
@@ -762,10 +1039,39 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
                             Text(sub.textReply!,
                                 style: const TextStyle(fontSize: 13)),
                           if (sub.fileUrl != null)
-                            Text('File: ${sub.fileName ?? "attachment"}',
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.primary)),
+                            InkWell(
+                              onTap: () => _downloadAttachment(
+                                  sub.fileUrl!, sub.fileName ?? 'attachment'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 4, horizontal: 8),
+                                margin: const EdgeInsets.only(top: 4),
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.attach_file,
+                                        size: 12,
+                                        color: AppColors.primary),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      sub.fileName ?? 'Download file',
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.primary),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.download,
+                                        size: 12,
+                                        color: AppColors.primary),
+                                  ],
+                                ),
+                              ),
+                            ),
                           Text(
                             '${sub.submittedAt.month}/${sub.submittedAt.day} '
                             '${sub.submittedAt.hour.toString().padLeft(2, '0')}:'
