@@ -44,7 +44,8 @@
       "mcp__plugin_context-mode_context-mode__ctx_search",
       "Bash(Select-String -Pattern \"error \")",
       "PowerShell(Set-Content *)",
-      "Bash(Select-Object -First 30)"
+      "Bash(Select-Object -First 30)",
+      "Bash(Select-String *)"
     ]
   }
 }

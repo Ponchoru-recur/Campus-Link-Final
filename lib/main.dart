@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chats_screen.dart';
+import 'package:luminescence/pages/home_hamburger/updates_tasks_screen.dart';
 import 'package:luminescence/pages/login/login_screen.dart';
 import 'package:luminescence/pages/role_selection/role_selection_screen.dart';
 import 'package:luminescence/pages/verify_email/verify_email_screen.dart';
@@ -28,6 +29,7 @@ class MyApp extends StatelessWidget {
         '/roleSelection': (context) => RoleSelectionScreen(),
         '/login': (context) => LoginScreen(),
         '/chatScreen': (context) => const ChatsScreen(),
+        '/updatesTasks': (context) => const UpdatesTasksScreen(),
       },
     );
   }

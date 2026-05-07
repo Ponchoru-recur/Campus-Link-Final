@@ -9,6 +9,7 @@ import 'package:luminescence/themes/app_colors.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chat_avatars.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/message_actions.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/message_edit_delete.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/task_creation_dialog.dart';
 
 /// The full conversation screen for a GROUP CHAT.
 /// Edit this file to change how group chat conversations look and behave.
@@ -27,6 +28,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   late String _groupName;
   late String _chatId;
   bool _isAdmin = false;
+  bool _isFaculty = false;
   bool _isSelectionMode = false;
   final Set<String> _selectedMemberUids = {};
   final Set<String> _markedAsRead = {};
@@ -125,6 +127,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
+  void _showTaskCreation() {
+    showDialog(
+      context: context,
+      builder: (_) => TaskCreationDialog(
+        chatId: _chatId,
+        chatType: 'group',
+        chatName: _groupName,
+      ),
+    );
+  }
+
   String _formatTime(DateTime dt) {
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
     final m = dt.minute.toString().padLeft(2, '0');
@@ -165,6 +178,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       final isFaculty = userDoc.data()?['role'] == 'faculty';
       setState(() {
         _isAdmin = isCreator || isFaculty;
+        _isFaculty = isFaculty;
       });
     } catch (e) {
       debugPrint('Error checking admin status: $e');
@@ -1183,6 +1197,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           _MessageInputBar(
             controller: _controller,
             onSend: _sendMessage,
+            isFaculty: _isFaculty,
+            onTaskCreate: _showTaskCreation,
           ),
         ],
       ),
@@ -1244,8 +1260,13 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTask = message.type == 'task';
     final isMe = message.isMe;
     final isSystem = message.type == 'system';
+
+    if (isTask) {
+      return _TaskBubble(message: message, formatTime: formatTime);
+    }
 
     if (isSystem) {
       return Padding(
@@ -1395,11 +1416,101 @@ class _MessageBubble extends StatelessWidget {
 // ─────────────────────────────────────────────
 // Message Input Bar
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────
+// Task Bubble (rendered for type=='task' messages)
+// ─────────────────────────────────────
+class _TaskBubble extends StatelessWidget {
+  final Message message;
+  final String Function(DateTime) formatTime;
+
+  const _TaskBubble({required this.message, required this.formatTime});
+
+  @override
+  Widget build(BuildContext context) {
+    final isMe = message.isMe;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!isMe) ...[
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+              child: Text(
+                message.senderName.isNotEmpty ? message.senderName[0] : '?',
+                style: const TextStyle(fontSize: 12, color: AppColors.primaryDark, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isMe ? AppColors.primary.withValues(alpha: 0.08) : const Color(0xFFF0F0F0),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft: Radius.circular(isMe ? 16 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 16),
+                ),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.assignment, color: AppColors.primary, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text('TASK', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.primary, letterSpacing: 1)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (!isMe)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(message.senderName, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+                    ),
+                  Text(message.text, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(formatTime(message.timestamp), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MessageInputBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
+  final bool isFaculty;
+  final VoidCallback? onTaskCreate;
 
-  const _MessageInputBar({required this.controller, required this.onSend});
+  const _MessageInputBar({
+    required this.controller,
+    required this.onSend,
+    this.isFaculty = false,
+    this.onTaskCreate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1412,6 +1523,21 @@ class _MessageInputBar extends StatelessWidget {
       child: SafeArea(
         child: Row(
           children: [
+            if (isFaculty && onTaskCreate != null)
+              GestureDetector(
+                onTap: onTaskCreate,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: const Icon(Icons.add, color: AppColors.primary, size: 20),
+                ),
+              ),
             Expanded(
               child: TextField(
                 controller: controller,
