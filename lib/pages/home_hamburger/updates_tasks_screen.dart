@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:luminescence/models/task.dart';
 import 'package:luminescence/themes/app_colors.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Updates & Tasks screen showing all tasks for the current user.
 /// Students can view and submit. Faculty can delete their own or ignore others'.
@@ -217,6 +218,27 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
     return task.deadline!.isBefore(DateTime.now());
   }
 
+  Future<void> _downloadAttachment(String fileUrl, String fileName) async {
+    try {
+      final uri = Uri.parse(fileUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cannot open file')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to open file: $e')),
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     _tasksSubscription?.cancel();
@@ -400,6 +422,48 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
                                       ),
                                   ],
                                 ),
+                                if (task.attachments.isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Attachments (${task.attachments.length})',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey[700]),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ...task.attachments.map((a) => InkWell(
+                                        onTap: () =>
+                                            _downloadAttachment(a.fileUrl, a.fileName),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 6, horizontal: 10),
+                                          margin: const EdgeInsets.only(bottom: 4),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary
+                                                .withValues(alpha: 0.05),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.insert_drive_file,
+                                                  size: 16,
+                                                  color: AppColors.primary),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(a.fileName,
+                                                    style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color: AppColors.primary)),
+                                              ),
+                                              const Icon(Icons.download,
+                                                  size: 14,
+                                                  color: AppColors.primary),
+                                            ],
+                                          ),
+                                        ),
+                                      )),
+                                ],
                                 if (task.submissions.isNotEmpty) ...[
                                   const SizedBox(height: 8),
                                   Text(
