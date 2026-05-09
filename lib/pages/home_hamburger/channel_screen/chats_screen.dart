@@ -11,6 +11,7 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/announcement_bu
 import 'package:luminescence/pages/home_hamburger/channel_screen/create_group_chat_button.dart';
 import 'package:luminescence/pages/home_hamburger/settings_screen/settings_screen.dart';
 import 'package:luminescence/pages/home_hamburger/updates_tasks_screen.dart';
+import 'package:luminescence/pages/tasks/task_list_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_item.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_tile.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/individual_chat_screen.dart';
@@ -743,6 +744,19 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const UpdatesTasksScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _DrawerItem(
+                  icon: Icons.task_outlined,
+                  label: 'Tasks',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TaskListScreen(),
                       ),
                     );
                   },

@@ -46,7 +46,12 @@
       "PowerShell(Set-Content *)",
       "Bash(Select-Object -First 30)",
       "Bash(Select-String *)",
-      "PowerShell(ls \"C:\\\\Users\\\\Sam\\\\Desktop\\\\Knowledge Folder\\\\Flutter Shenanigans\\\\Final\\\\luminescence\\\\lib\\\\services\" 2>$null; echo \"exit: $LASTEXITCODE\")"
+      "PowerShell(ls \"C:\\\\Users\\\\Sam\\\\Desktop\\\\Knowledge Folder\\\\Flutter Shenanigans\\\\Final\\\\luminescence\\\\lib\\\\services\" 2>$null; echo \"exit: $LASTEXITCODE\")",
+      "PowerShell(New-Item *)",
+      "Bash(flutter clean *)",
+      "Bash(./gradlew.bat processDebugManifest)",
+      "Bash(flutter create *)",
+      "PowerShell(Get-Content *)"
     ]
   }
 }

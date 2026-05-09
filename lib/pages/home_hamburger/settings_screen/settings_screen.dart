@@ -37,8 +37,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           .doc(user.uid)
           .get();
       if (!mounted) return;
+      final data = doc.data();
       setState(() {
-        _role = doc.data()?['role'] ?? 'student';
+        _role = data?['role'] ?? 'student';
         _isLoading = false;
       });
     } catch (e) {
