@@ -12,12 +12,14 @@ class Task {
   final String chatType; // 'group' or 'dm'
   final DateTime createdAt;
   final DateTime? deadline;
-  final bool allowSubmissions;
-  final List<TaskAttachment> attachments;
-  final List<TaskSubmission> submissions;
+  final List<TaskLink> links;
   final bool isActive; // false if faculty deleted/ignored it
   final List<String> targetUids; // UIDs of users who should see this task
   final List<String> ignoredBy; // Faculty who tapped out
+  final List<String> doneByUids; // students who marked as done
+  final int? greenThresholdDays; // per-task override for green deadline color
+  final int? yellowThresholdDays; // per-task override for yellow deadline color
+  final int? redThresholdDays; // per-task override for red deadline color
 
   const Task({
     required this.id,
@@ -29,12 +31,14 @@ class Task {
     required this.chatType,
     required this.createdAt,
     this.deadline,
-    this.allowSubmissions = false,
-    this.attachments = const [],
-    this.submissions = const [],
+    this.links = const [],
     this.isActive = true,
     this.targetUids = const [],
     this.ignoredBy = const [],
+    this.doneByUids = const [],
+    this.greenThresholdDays,
+    this.yellowThresholdDays,
+    this.redThresholdDays,
   });
 
   factory Task.fromFirestore(DocumentSnapshot doc) {
@@ -49,16 +53,16 @@ class Task {
       chatType: data['chatType'] ?? 'group',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       deadline: (data['deadline'] as Timestamp?)?.toDate(),
-      allowSubmissions: data['allowSubmissions'] ?? false,
-      attachments: (data['attachments'] as List<dynamic>? ?? [])
-          .map((e) => TaskAttachment.fromMap(e as Map<String, dynamic>))
-          .toList(),
-      submissions: (data['submissions'] as List<dynamic>? ?? [])
-          .map((e) => TaskSubmission.fromMap(e as Map<String, dynamic>))
+      links: (data['links'] as List<dynamic>? ?? [])
+          .map((e) => TaskLink.fromMap(e as Map<String, dynamic>))
           .toList(),
       isActive: data['isActive'] ?? true,
       targetUids: List<String>.from(data['targetUids'] ?? []),
       ignoredBy: List<String>.from(data['ignoredBy'] ?? []),
+      doneByUids: List<String>.from(data['doneByUids'] ?? []),
+      greenThresholdDays: data['greenThresholdDays'] as int?,
+      yellowThresholdDays: data['yellowThresholdDays'] as int?,
+      redThresholdDays: data['redThresholdDays'] as int?,
     );
   }
 
@@ -71,67 +75,30 @@ class Task {
         'chatType': chatType,
         'createdAt': createdAt,
         'deadline': deadline,
-        'allowSubmissions': allowSubmissions,
-        'attachments': attachments.map((a) => a.toMap()).toList(),
-        'submissions': submissions.map((s) => s.toMap()).toList(),
+        'links': links.map((l) => l.toMap()).toList(),
         'isActive': isActive,
         'targetUids': targetUids,
         'ignoredBy': ignoredBy,
+        'doneByUids': doneByUids,
+        'greenThresholdDays': greenThresholdDays,
+        'yellowThresholdDays': yellowThresholdDays,
+        'redThresholdDays': redThresholdDays,
       };
 }
 
-class TaskAttachment {
-  final String fileName;
-  final String fileUrl;
-  final String? mimeType;
+class TaskLink {
+  final String title;
+  final String url;
 
-  const TaskAttachment({required this.fileName, required this.fileUrl, this.mimeType});
+  const TaskLink({required this.title, required this.url});
 
-  factory TaskAttachment.fromMap(Map<String, dynamic> m) => TaskAttachment(
-        fileName: m['fileName'] ?? '',
-        fileUrl: m['fileUrl'] ?? '',
-        mimeType: m['mimeType'],
+  factory TaskLink.fromMap(Map<String, dynamic> m) => TaskLink(
+        title: m['title'] ?? '',
+        url: m['url'] ?? '',
       );
 
   Map<String, dynamic> toMap() => {
-        'fileName': fileName,
-        'fileUrl': fileUrl,
-        if (mimeType != null) 'mimeType': mimeType,
-      };
-}
-
-class TaskSubmission {
-  final String studentUid;
-  final String studentName;
-  final String? textReply;
-  final String? fileUrl;
-  final String? fileName;
-  final DateTime submittedAt;
-
-  const TaskSubmission({
-    required this.studentUid,
-    required this.studentName,
-    this.textReply,
-    this.fileUrl,
-    this.fileName,
-    required this.submittedAt,
-  });
-
-  factory TaskSubmission.fromMap(Map<String, dynamic> m) => TaskSubmission(
-        studentUid: m['studentUid'] ?? '',
-        studentName: m['studentName'] ?? '',
-        textReply: m['textReply'],
-        fileUrl: m['fileUrl'],
-        fileName: m['fileName'],
-        submittedAt: (m['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      );
-
-  Map<String, dynamic> toMap() => {
-        'studentUid': studentUid,
-        'studentName': studentName,
-        if (textReply != null) 'textReply': textReply,
-        if (fileUrl != null) 'fileUrl': fileUrl,
-        if (fileName != null) 'fileName': fileName,
-        'submittedAt': submittedAt,
+        'title': title,
+        'url': url,
       };
 }

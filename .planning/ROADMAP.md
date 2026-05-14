@@ -9,8 +9,9 @@
 | 3 | Auto-Wire Contacts | Auto-add instructor contacts when students join group chats; handle instructor additions | IDM-03, IDM-04, IDM-14 | 3 | ✓ |
 | 4 | Contact Search & Add | Search bar to find and add student/instructor peers as DM contacts | IDM-06, IDM-07 | 2 |
 | 5 | Visual Distinction | Distinguish instructor DMs from student DMs in chat list | IDM-08, IDM-09, IDM-10 | 2 |
+| 6 | Create Tasks Features | Adding new features related to Create Tasks | TBD | TBD |
 
-Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covered
+Total: **6 phases** | **15 v1 requirements mapped** | All v1 requirements covered
 
 ---
 
@@ -108,6 +109,22 @@ Total: **5 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 1. Instructor DMs in the chat list use `AppColors.instructorPurple` accent, distinct tile styling (e.g., purple left border or background tint), and a role badge ("Instructor")
 2. Student DMs use standard styling (no purple accent, different `ChatType` or role-based styling)
 3. In the DM conversation screen, the instructor's name/role is clearly displayed (role badge or purple indicator) so users always know who they're talking to
+
+---
+
+### Phase6: Create Tasks Features
+
+**Goal**: Adding new features related to Create Tasks
+
+**Requirements**: TBD
+
+**Plans:** TBD
+
+**Plan list**:
+- [ ] TBD
+
+**Success criteria**:
+TBD
 
 ---
 

@@ -1,8 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:luminescence/pages/tasks/submit_task_screen.dart';
-import 'package:luminescence/pages/tasks/submissions_list_screen.dart';
 import 'package:luminescence/services/task_service.dart';
 import 'package:luminescence/themes/app_colors.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,32 +16,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   Map<String, dynamic>? _task;
   bool _isLoading = true;
   String? _error;
-  String _userRole = 'student';
 
   final _taskService = TaskService();
 
   @override
   void initState() {
     super.initState();
-    _loadUserRole();
     _loadTask();
-  }
-
-  Future<void> _loadUserRole() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      if (!mounted) return;
-      setState(() {
-        _userRole = doc.data()?['role'] ?? 'student';
-      });
-    } catch (e) {
-      debugPrint('Failed to load user role: $e');
-    }
   }
 
   Future<void> _loadTask() async {
@@ -75,43 +52,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         title: Text(_task?['title'] ?? 'Task Detail'),
       ),
       body: _buildBody(),
-      floatingActionButton: _task != null && _userRole == 'student'
-          ? FloatingActionButton.extended(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SubmitTaskScreen(
-                      taskId: widget.taskId,
-                      taskTitle: _task!['title'] ?? '',
-                    ),
-                  ),
-                );
-              },
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.upload),
-              label: const Text('Submit'),
-            )
-          : _task != null && _userRole == 'faculty'
-              ? FloatingActionButton.extended(
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SubmissionsListScreen(
-                          taskId: widget.taskId,
-                          taskTitle: _task!['title'] ?? '',
-                        ),
-                      ),
-                    );
-                  },
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  icon: const Icon(Icons.list),
-                  label: const Text('Submissions'),
-                )
-              : null,
     );
   }
 
@@ -129,7 +69,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     }
 
     final task = _task!;
-    final attachments = task['attachments'] as List<dynamic>? ?? [];
+    final links = (task['links'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
     final deadline = task['deadline'] != null
         ? DateTime.parse(task['deadline'])
         : null;
@@ -162,32 +102,29 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               ],
             ),
           const SizedBox(height: 24),
-          if (attachments.isNotEmpty) ...[
+          if (links.isNotEmpty) ...[
             const Text(
-              'Attachments:',
+              'Links:',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            ...attachments.map((att) {
+            ...links.map((link) {
+              final title = link['title'] ?? 'Unknown';
+              final url = link['url'] ?? '';
               return ListTile(
-                leading: const Icon(Icons.attach_file),
-                title: Text(att['fileName'] ?? 'Unknown'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.open_in_new),
-                  onPressed: () async {
-                    final url = att['viewLink'];
-                    if (url != null) {
-                      final uri = Uri.parse(url);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
-                      }
-                    }
-                  },
-                ),
+                leading: const Icon(Icons.link, color: AppColors.primary),
+                title: Text(title),
+                trailing: const Icon(Icons.open_in_new),
+                onTap: () async {
+                  final uri = Uri.parse(url);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
               );
             }),
           ] else
-            const Text('No attachments'),
+            const Text('No links'),
         ],
       ),
     );

@@ -15,10 +15,11 @@ class Message {
   final String text;
   final DateTime timestamp;
   final bool isMe;
-  final String? type; // 'system' for system messages
+  final String? type; // 'system' for system messages, 'task' for task messages
   final List<String> readBy; // UIDs of users who read this
   final List<EditEntry> editHistory; // Previous versions of this message
   final bool isDeleted; // true if message was soft-deleted
+  final String? taskId; // links to tasks/{taskId} document for type=='task'
 
   const Message({
     required this.id,
@@ -31,6 +32,7 @@ class Message {
     this.readBy = const [],
     this.editHistory = const [],
     this.isDeleted = false,
+    this.taskId,
   });
 
   bool get isEdited => editHistory.isNotEmpty;

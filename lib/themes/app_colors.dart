@@ -6,19 +6,15 @@ import 'package:flutter/material.dart';
 // ============================================
 
 class AppColors {
-  // ============================================
-  // SIMPLE COLORS (Direct Use in Widgets)
-  // ============================================
-  static const Color primary = Color(0xFF2DC58C); // teal-green
-  static const Color primaryDark = Color(0xFF1E9E70);
-  static const Color instructorPurple = Color(0xFF7B5EA7);
-  static const Color background = Color(0xFFFFFFFF);
-  static const Color surface = Color(0xFFF5F5F5);
-  static const Color divider = Color(0xFFE0E0E0);
-  static const Color textPrimary = Color(0xFF1A1A1A);
-  static const Color textSecondary = Color(0xFF757575);
-  static const Color unreadBadge = Color(0xFF2DC58C);
-  static const Color drawerHeader = Color(0xFF2DC58C);
+  // --- BACKWARD-COMPATIBLE ALIASES (for code still using old names) ---
+  static const Color primary = lightPrimary;
+  static const Color primaryDark = lightOnPrimary;
+  static const Color divider = lightBorder;
+  static const Color textPrimary = lightTextPrimary;
+  static const Color textSecondary = lightTextSecondary;
+  static const Color instructorPurple = Color(0xFF7B1FA2); // Purple for instructor badges
+  static const Color drawerHeader = lightPrimary; // Drawer header background
+  static const Color unreadBadge = urgentRed; // Unread notification badge
 
   // --- PRIMARY COLORS ---
   //
@@ -62,7 +58,7 @@ class AppColors {
   static const Color lightSurface = Color(0xFFFAFAFA); // Light background
   static const Color lightSurfaceContainer = Color(
     0xFFFFFFFF,
-  ); // Card background
+  ); // Card background 
 
   static const Color darkSurface = Color(0xFF121212); // Dark background
   static const Color darkSurfaceContainer = Color(
@@ -76,10 +72,12 @@ class AppColors {
 
   // --- PRIORITY/STATUS COLORS ---
 
-  static const Color urgentRed = Color(0xFFD32F2F); // Urgent priority
+  static const Color urgentRed = Color(0xFFD32F2F); // Urgent priority / overdue
   static const Color priorityOrange = Color(0xFFF57C00); // Medium priority
   static const Color standardBlue = Color(0xFF1976D2); // Standard priority
   static const Color successGreen = Color(0xFF388E3C); // Success/Submitted
+  static const Color doneGreen = Color(0xFF4CAF50); // Task completed
+  static const Color pendingYellow = Color(0xFFFFA000); // Task nearing deadline
 
   // --- TEXT COLORS ---
 

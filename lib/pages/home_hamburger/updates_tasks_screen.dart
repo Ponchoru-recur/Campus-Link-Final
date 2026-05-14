@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:luminescence/models/task.dart';
+import 'package:luminescence/services/task_service.dart';
 import 'package:luminescence/themes/app_colors.dart';
-import 'package:luminescence/services/storage_service.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 
 /// Updates & Tasks screen showing all tasks for the current user.
-/// Students can view and submit. Faculty can delete their own or ignore others'.
+/// Tasks are informational only - no submissions allowed.
 class UpdatesTasksScreen extends StatefulWidget {
   const UpdatesTasksScreen({super.key});
 
@@ -22,6 +23,7 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
   bool _isLoading = true;
   String _userRole = 'student';
   String? _userId;
+  final _taskService = TaskService();
 
   @override
   void initState() {
@@ -55,7 +57,6 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
     _tasksSubscription = FirebaseFirestore.instance
         .collection('tasks')
         .where('targetUids', arrayContains: uid)
-        .where('isActive', isEqualTo: true)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .listen((snapshot) {
@@ -122,172 +123,15 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
     }
   }
 
-  Future<void> _submitToTask(Task task) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final name = await _getUserName(user);
-    final controller = TextEditingController();
-    String? attachedFilePath;
-    String? attachedFileName;
-
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            title: const Text('Submit to Task'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(task.description,
-                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                  const SizedBox(height: 16),
-                  if (task.deadline != null) ...[
-                    Row(
-                      children: [
-                        Icon(Icons.calendar_today, size: 14, color: _isOverdue(task) ? AppColors.urgentRed : Colors.grey[600]),
-                        const SizedBox(width: 6),
-                        Text(
-                          _isOverdue(task) ? 'Deadline has passed' : 'Due: ${_formatDate(task.deadline)}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _isOverdue(task) ? AppColors.urgentRed : Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  TextField(
-                    controller: controller,
-                    maxLines: 4,
-                    minLines: 2,
-                    decoration: InputDecoration(
-                      hintText: 'Your reply (optional)...',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      contentPadding: const EdgeInsets.all(14),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      TextButton.icon(
-                        onPressed: () async {
-                          try {
-                            final pickResult = await FilePicker.platform.pickFiles(
-                              allowMultiple: false,
-                              withData: false,
-                            );
-                            if (pickResult != null && pickResult.files.isNotEmpty) {
-                              setState(() {
-                                attachedFilePath = pickResult.files.first.path;
-                                attachedFileName = pickResult.files.first.name;
-                              });
-                            }
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Failed to pick file: $e')),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.attach_file, size: 16),
-                        label: Text(
-                          attachedFileName ?? 'Attach File',
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ),
-                      if (attachedFileName != null) ...[
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            attachedFileName!,
-                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.clear, size: 14),
-                          onPressed: () => setState(() {
-                            attachedFilePath = null;
-                            attachedFileName = null;
-                          }),
-                          splashRadius: 14,
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(dialogContext, {
-                  'textReply': controller.text.trim(),
-                  'filePath': attachedFilePath,
-                  'fileName': attachedFileName,
-                }),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Submit'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (result == null) return;
-
+  Future<void> _toggleTaskDone(Task task) async {
+    final uid = _userId;
+    if (uid == null) return;
+    final isDone = task.doneByUids.contains(uid);
     try {
-      // Server-side deadline check
-      if (task.deadline != null && task.deadline!.isBefore(DateTime.now())) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Deadline has passed. Submissions are closed.')),
-          );
-        }
-        return;
-      }
-
-      String? fileUrl;
-      if (result['filePath'] != null) {
-        final storageService = StorageService();
-        fileUrl = await storageService.uploadSubmissionFile(
-          taskId: task.id,
-          studentUid: user.uid,
-          filePath: result['filePath'],
-          fileName: result['fileName'] ?? 'submission',
-        );
-      }
-
-      final submission = TaskSubmission(
-        studentUid: user.uid,
-        studentName: name,
-        textReply: result['textReply']?.isNotEmpty == true ? result['textReply'] : null,
-        fileUrl: fileUrl,
-        fileName: fileUrl != null ? result['fileName'] : null,
-        submittedAt: DateTime.now(),
-      );
-
-      await FirebaseFirestore.instance
-          .collection('tasks')
-          .doc(task.id)
-          .update({
-        'submissions': FieldValue.arrayUnion([submission.toMap()]),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Submitted!')),
-        );
+      if (isDone) {
+        await _taskService.unmarkTaskDone(task.id, uid);
+      } else {
+        await _taskService.markTaskDone(task.id, uid);
       }
     } catch (e) {
       if (mounted) {
@@ -298,16 +142,11 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
     }
   }
 
-  Future<String> _getUserName(User user) async {
-    final email = user.email ?? '';
-    if (email.isEmpty) return 'Unknown';
-    return email
-        .split('@')
-        .first
-        .replaceAll('.', ' ')
-        .split(' ')
-        .map((p) => p.isEmpty ? p : p[0].toUpperCase() + p.substring(1))
-        .join(' ');
+  Future<void> _launchLink(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   String _formatDate(DateTime? dt) {
@@ -318,6 +157,24 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
   bool _isOverdue(Task task) {
     if (task.deadline == null) return false;
     return task.deadline!.isBefore(DateTime.now());
+  }
+
+  Color _getDeadlineColor(Task task) {
+    if (task.deadline == null) return Colors.grey[600]!;
+
+    final now = DateTime.now();
+    final deadline = task.deadline!;
+    final daysLeft = deadline.difference(now).inDays;
+
+    // Check per-task thresholds first
+    final green = task.greenThresholdDays ?? TaskService.defaultGreenDays;
+    final yellow = task.yellowThresholdDays ?? TaskService.defaultYellowDays;
+    final red = task.redThresholdDays ?? TaskService.defaultRedDays;
+
+    if (daysLeft >= green) return AppColors.doneGreen;
+    if (daysLeft >= yellow) return AppColors.pendingYellow;
+    if (daysLeft >= red) return AppColors.urgentRed;
+    return AppColors.urgentRed;
   }
 
   @override
@@ -356,247 +213,346 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
                     ],
                   ),
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _tasks.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final task = _tasks[index];
-                    final isCreator = task.createdBy == _userId;
-                    final isFaculty = _userRole == 'faculty';
-                    final overdue = _isOverdue(task);
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: overdue
-                              ? AppColors.urgentRed.withValues(alpha: 0.3)
-                              : AppColors.divider,
+              : Builder(builder: (context) {
+                  final uid = _userId;
+                  final activeTasks = _tasks.where((t) {
+                    return t.isActive && (uid == null || !t.doneByUids.contains(uid));
+                  }).toList();
+                  final doneTasks = _tasks.where((t) {
+                    return t.isActive && uid != null && t.doneByUids.contains(uid);
+                  }).toList();
+                  final deletedTasks = _tasks.where((t) => !t.isActive).toList();
+
+                  return ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      if (activeTasks.isNotEmpty) ...[
+                        ...activeTasks.map((task) => _buildTaskCard(task)),
+                        const SizedBox(height: 16),
+                      ],
+                      if (doneTasks.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle, size: 16, color: AppColors.doneGreen),
+                              SizedBox(width: 6),
+                              Text('Completed',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.doneGreen)),
+                            ],
+                          ),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                        ...doneTasks.map((task) => _buildTaskCard(task, isDone: true)),
+                        const SizedBox(height: 16),
+                      ],
+                      if (deletedTasks.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline, size: 16, color: Colors.grey),
+                              SizedBox(width: 6),
+                              Text('Deleted',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey)),
+                            ],
                           ),
-                        ],
+                        ),
+                        ...deletedTasks.map((task) => _buildTaskCard(task, isDeleted: true)),
+                      ],
+                    ],
+                  );
+                }),
+    );
+  }
+
+  Widget _buildTaskCard(Task task, {bool isDone = false, bool isDeleted = false}) {
+    final isCreator = task.createdBy == _userId;
+    final isFaculty = _userRole == 'faculty';
+    final overdue = _isOverdue(task);
+    final deadlineColor = isDeleted ? Colors.grey[500]! : _getDeadlineColor(task);
+    final uid = _userId;
+
+    return GestureDetector(
+      onLongPress: isDone || isDeleted
+          ? null
+          : () {
+              if (uid != null) {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Mark as done?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _toggleTaskDone(task);
+                        },
+                        child: const Text('Mark done'),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Header
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: overdue
-                                  ? AppColors.urgentRed.withValues(alpha: 0.05)
-                                  : AppColors.primary.withValues(alpha: 0.05),
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(16),
-                                topRight: Radius.circular(16),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: overdue
-                                        ? AppColors.urgentRed
-                                            .withValues(alpha: 0.1)
-                                        : AppColors.primary
-                                            .withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    Icons.assignment,
-                                    color: overdue
-                                        ? AppColors.urgentRed
-                                        : AppColors.primary,
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        task.title,
-                                        style: const TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w600),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'By ${task.creatorName}',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[600]),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (overdue)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.urgentRed,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Text('OVERDUE',
-                                        style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                            letterSpacing: 0.5)),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          // Body
-                          Padding(
-                            padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(task.description,
-                                    style: const TextStyle(
-                                        fontSize: 14,
-                                        color: AppColors.textPrimary)),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Icon(Icons.calendar_today,
-                                        size: 14, color: Colors.grey[600]),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'Due: ${_formatDate(task.deadline)}',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: overdue
-                                              ? AppColors.urgentRed
-                                              : Colors.grey[600]),
-                                    ),
-                                    const Spacer(),
-                                    if (task.allowSubmissions)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.successGreen
-                                              .withValues(alpha: 0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: const Text('Submissions open',
-                                            style: TextStyle(
-                                                fontSize: 10,
-                                                color:
-                                                    AppColors.successGreen,
-                                                fontWeight: FontWeight.w600)),
-                                      ),
-                                  ],
-                                ),
-                                if (task.submissions.isNotEmpty) ...[
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '${task.submissions.length} submission(s)',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w500),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          // Actions
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                            child: Row(
-                              children: [
-                                if (!isFaculty &&
-                                    task.allowSubmissions)
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                      onPressed: () =>
-                                          _submitToTask(task),
-                                      icon: const Icon(Icons.send, size: 16),
-                                      label: const Text('Submit'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.primary,
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(10)),
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 10),
-                                      ),
-                                    ),
-                                  ),
-                                if (isFaculty && isCreator)
-                                  Expanded(
-                                    child: TextButton.icon(
-                                      onPressed: () =>
-                                          _confirmDelete(task),
-                                      icon: const Icon(Icons.delete_outline,
-                                          size: 16),
-                                      label: const Text('Delete'),
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: AppColors.urgentRed,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(10)),
-                                      ),
-                                    ),
-                                  ),
-                                if (isFaculty && !isCreator) ...[
-                                  Expanded(
-                                    child: TextButton.icon(
-                                      onPressed: () => _ignoreTask(task),
-                                      icon: const Icon(Icons.visibility_off,
-                                          size: 16),
-                                      label: const Text('Ignore'),
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: Colors.grey[600],
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(10)),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                if (isFaculty &&
-                                    task.submissions.isNotEmpty)
-                                  Expanded(
-                                    child: TextButton.icon(
-                                      onPressed: () =>
-                                          _showSubmissions(task),
-                                      icon: const Icon(Icons.list_alt,
-                                          size: 16),
-                                      label: const Text('View Submissions'),
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: AppColors.primary,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(10)),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                    ],
+                  ),
+                );
+              }
+            },
+      child: Container(
+      margin: const EdgeInsets.only(bottom: 0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDeleted
+              ? Colors.grey[300]!
+              : isDone
+                  ? AppColors.doneGreen.withValues(alpha: 0.3)
+                  : overdue
+                      ? AppColors.urgentRed.withValues(alpha: 0.3)
+                      : AppColors.divider,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isDeleted
+                  ? Colors.grey[100]!
+                  : isDone
+                      ? AppColors.doneGreen.withValues(alpha: 0.05)
+                      : overdue
+                          ? AppColors.urgentRed.withValues(alpha: 0.05)
+                          : AppColors.primary.withValues(alpha: 0.05),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isDeleted
+                        ? Colors.grey[300]
+                        : isDone
+                            ? AppColors.doneGreen.withValues(alpha: 0.1)
+                            : overdue
+                                ? AppColors.urgentRed.withValues(alpha: 0.1)
+                                : AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    isDeleted ? Icons.delete_outline : isDone ? Icons.check_circle : Icons.assignment,
+                    color: isDeleted
+                        ? Colors.grey[500]
+                        : isDone
+                            ? AppColors.doneGreen
+                            : overdue
+                                ? AppColors.urgentRed
+                                : AppColors.primary,
+                    size: 20,
+                  ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        task.title,
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            decoration: isDone || isDeleted
+                                ? TextDecoration.lineThrough
+                                : null),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'By ${task.creatorName}',
+                        style: TextStyle(
+                            fontSize: 12, color: isDeleted ? Colors.grey[400] : Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+                isDeleted
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[400]!,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('DELETED',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: 0.5)),
+                      )
+                    : overdue && !isDone
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.urgentRed,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text('OVERDUE',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    letterSpacing: 0.5)),
+                          )
+                        : const SizedBox.shrink(),
+              ],
+            ),
+          ),
+          // Body
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(task.description,
+                    style: TextStyle(
+                        fontSize: 14,
+                        color: isDeleted ? Colors.grey[500]! : AppColors.textPrimary,
+                        decoration: isDeleted ? TextDecoration.lineThrough : null)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today,
+                        size: 14, color: deadlineColor),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Due: ${_formatDate(task.deadline)}',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: deadlineColor),
+                    ),
+                    const SizedBox(width: 8),
+                    if (!isDone && !isDeleted && !overdue)
+                      Text(
+                        _daysLeftText(task),
+                        style: TextStyle(
+                            fontSize: 11, color: deadlineColor, fontWeight: FontWeight.w500),
+                      ),
+                  ],
+                ),
+                if (!isDeleted && task.links.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: task.links.map((link) => InkWell(
+                      onTap: () => _launchLink(link.url),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.link, size: 12, color: AppColors.primary),
+                            const SizedBox(width: 4),
+                            Text(
+                              link.title,
+                              style: const TextStyle(fontSize: 11, color: AppColors.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Actions
+          if (!isDone && !isDeleted)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Row(
+                children: [
+                  if (isFaculty && isCreator) ...[
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: () => _editTask(task),
+                        icon: const Icon(Icons.edit_outlined, size: 16),
+                        label: const Text('Edit'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: () => _confirmDelete(task),
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text('Delete'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.urgentRed,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (isFaculty && !isCreator) ...[
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: () => _ignoreTask(task),
+                        icon: const Icon(Icons.visibility_off, size: 16),
+                        label: const Text('Ignore'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.grey[600],
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    ),
+    );
+  }
+
+  String _daysLeftText(Task task) {
+    if (task.deadline == null) return '';
+    final daysLeft = task.deadline!.difference(DateTime.now()).inDays;
+    if (daysLeft <= 0) return 'Due today';
+    if (daysLeft == 1) return '1 day left';
+    return '$daysLeft days left';
+  }
+
+  void _editTask(Task task) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _EditTaskScreen(task: task),
+      ),
     );
   }
 
@@ -624,98 +580,200 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
         false;
     if (confirmed) await _deleteTask(task);
   }
+}
 
-  void _showSubmissions(Task task) {
-    showModalBottomSheet(
+/// Inline edit task screen for faculty to update task fields.
+class _EditTaskScreen extends StatefulWidget {
+  final Task task;
+
+  const _EditTaskScreen({required this.task});
+
+  @override
+  State<_EditTaskScreen> createState() => _EditTaskScreenState();
+}
+
+class _EditTaskScreenState extends State<_EditTaskScreen> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _titleController;
+  late final TextEditingController _descController;
+  final _linksController = TextEditingController();
+  DateTime? _deadline;
+  bool _isSaving = false;
+  final _taskService = TaskService();
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.task.title);
+    _descController = TextEditingController(text: widget.task.description);
+    _deadline = widget.task.deadline;
+    _linksController.text = widget.task.links
+        .map((l) => l.url)
+        .join('\n');
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    _linksController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _selectDeadline() async {
+    final picked = await showDatePicker(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
+      initialDate: _deadline ?? DateTime.now().add(const Duration(days: 7)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() => _deadline = picked);
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      final List<TaskLink> links = [];
+      final linkText = _linksController.text.trim();
+      if (linkText.isNotEmpty) {
+        for (final line in linkText.split(RegExp(r'[\n,]'))) {
+          final trimmed = line.trim();
+          if (trimmed.isNotEmpty) {
+            links.add(TaskLink(title: trimmed, url: trimmed));
+          }
+        }
+      }
+
+      await _taskService.updateTask(
+        taskId: widget.task.id,
+        title: _titleController.text,
+        description: _descController.text,
+        deadline: _deadline != null
+            ? DateFormat('yyyy-MM-ddTHH:mm:ss').format(_deadline!)
+            : null,
+        clearDeadline: _deadline == null,
+        links: links,
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task updated')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        title: const Text('Edit Task'),
+        actions: [
+          TextButton(
+            onPressed: _isSaving ? null : _save,
+            child: _isSaving
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                : const Text('Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(
+                  labelText: 'Title',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) => v == null || v.isEmpty ? 'Title required' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  _deadline == null
+                      ? 'No deadline'
+                      : 'Deadline: ${DateFormat('yyyy-MM-dd').format(_deadline!)}',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_deadline != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () => setState(() => _deadline = null),
+                      ),
+                    const Icon(Icons.calendar_today),
+                  ],
+                ),
+                onTap: _selectDeadline,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _linksController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Links (one per line)',
+                  border: OutlineInputBorder(),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text('Submissions (${task.submissions.length})',
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            if (task.submissions.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text('No submissions yet',
-                      style: TextStyle(
-                          fontSize: 14, color: Colors.grey[600])),
-                ),
-              )
-            else
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: task.submissions.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, i) {
-                    final sub = task.submissions[i];
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        radius: 16,
-                        backgroundColor:
-                            AppColors.primary.withValues(alpha: 0.2),
-                        child: Text(
-                          sub.studentName.isNotEmpty
-                              ? sub.studentName[0]
-                              : '?',
-                          style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.primaryDark,
-                              fontWeight: FontWeight.bold),
+              const SizedBox(height: 16),
+              TextButton.icon(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Delete Task'),
+                      content: const Text('Delete this task for everyone?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          style: TextButton.styleFrom(foregroundColor: AppColors.urgentRed),
+                          child: const Text('Delete'),
                         ),
-                      ),
-                      title: Text(sub.studentName,
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w500)),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (sub.textReply != null)
-                            Text(sub.textReply!,
-                                style: const TextStyle(fontSize: 13)),
-                          if (sub.fileUrl != null)
-                            Text('File: ${sub.fileName ?? "attachment"}',
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.primary)),
-                          Text(
-                            '${sub.submittedAt.month}/${sub.submittedAt.day} '
-                            '${sub.submittedAt.hour.toString().padLeft(2, '0')}:'
-                            '${sub.submittedAt.minute.toString().padLeft(2, '0')}',
-                            style: TextStyle(
-                                fontSize: 11, color: Colors.grey[500]),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    await _taskService.deleteTask(widget.task.id);
+                    if (!mounted) return;
+                    Navigator.pop(context);
+                  }
+                },
+                icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.urgentRed),
+                label: const Text('Delete this task', style: TextStyle(color: AppColors.urgentRed)),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );

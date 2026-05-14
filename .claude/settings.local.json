@@ -51,7 +51,11 @@
       "Bash(flutter clean *)",
       "Bash(./gradlew.bat processDebugManifest)",
       "Bash(flutter create *)",
-      "PowerShell(Get-Content *)"
+      "PowerShell(Get-Content *)",
+      "Bash(Get-Content *)",
+      "Skill(gsd-phase)",
+      "Skill(gsd-resume-work)",
+      "PowerShell(gsd-sdk *)"
     ]
   }
 }

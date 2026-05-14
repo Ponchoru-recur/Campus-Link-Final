@@ -1,5 +1,5 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:luminescence/models/task.dart';
 import 'package:luminescence/services/task_service.dart';
 import 'package:luminescence/themes/app_colors.dart';
 import 'package:intl/intl.dart';
@@ -15,23 +15,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _linksController = TextEditingController();
   DateTime? _deadline;
-  final List<PlatformFile> _attachments = [];
   bool _isSubmitting = false;
 
   final _taskService = TaskService();
-
-  Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      type: FileType.any,
-    );
-    if (result != null) {
-      setState(() {
-        _attachments.addAll(result.files);
-      });
-    }
-  }
 
   Future<void> _selectDeadline() async {
     final picked = await showDatePicker(
@@ -59,11 +47,33 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     setState(() => _isSubmitting = true);
     try {
       final deadlineStr = DateFormat('yyyy-MM-ddTHH:mm:ss').format(_deadline!);
+
+      // Parse links from input (one per line or comma-separated)
+      final List<TaskLink> links = [];
+      final linkText = _linksController.text.trim();
+      if (linkText.isNotEmpty) {
+        // Split by newline or comma
+        final linkLines = linkText.split(RegExp(r'[\n,]'));
+        for (final line in linkLines) {
+          final trimmed = line.trim();
+          if (trimmed.isNotEmpty) {
+            // If it looks like a URL, use it as both title and URL
+            final Uri? uri = Uri.tryParse(trimmed);
+            if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
+              links.add(TaskLink(title: trimmed, url: trimmed));
+            } else {
+              // If not a valid URL, still add it but show warning or handle appropriately
+              links.add(TaskLink(title: trimmed, url: trimmed));
+            }
+          }
+        }
+      }
+
       await _taskService.createTask(
         title: _titleController.text,
         description: _descriptionController.text,
         deadline: deadlineStr,
-        attachments: _attachments,
+        links: links,
       );
       if (!mounted) return;
       Navigator.pop(context);
@@ -124,37 +134,15 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 onTap: _selectDeadline,
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  ElevatedButton(
-                    onPressed: _pickFiles,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Add Attachments'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (_attachments.isNotEmpty)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _attachments.map((file) {
-                    return ListTile(
-                      leading: const Icon(Icons.attach_file),
-                      title: Text(file.name),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          setState(() {
-                            _attachments.remove(file);
-                          });
-                        },
-                      ),
-                    );
-                  }).toList(),
+              // Links section
+              TextFormField(
+                controller: _linksController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Links (one per line or comma-separated)',
+                  border: OutlineInputBorder(),
                 ),
+              ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,

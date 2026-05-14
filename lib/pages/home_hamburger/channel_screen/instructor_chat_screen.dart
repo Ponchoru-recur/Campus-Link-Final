@@ -134,7 +134,7 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: AppColors.instructorPurple.withOpacity(0.08),
+            color: AppColors.instructorPurple.withValues(alpha: 0.08),
             child: Row(
               children: [
                 Icon(Icons.verified, size: 14, color: AppColors.instructorPurple),
@@ -204,7 +204,7 @@ class _MessageBubble extends StatelessWidget {
           if (!isMe) ...[
             CircleAvatar(
               radius: 14,
-              backgroundColor: AppColors.instructorPurple.withOpacity(0.2),
+              backgroundColor: AppColors.instructorPurple.withValues(alpha: 0.2),
               child: const Icon(
                 Icons.school,
                 size: 14,
@@ -236,7 +236,7 @@ class _MessageBubble extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isMe
                         ? AppColors.primary
-                        : AppColors.instructorPurple.withOpacity(0.1),
+                        : AppColors.instructorPurple.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -246,7 +246,7 @@ class _MessageBubble extends StatelessWidget {
                     border: isMe
                         ? null
                         : Border.all(
-                            color: AppColors.instructorPurple.withOpacity(0.2),
+                            color: AppColors.instructorPurple.withValues(alpha: 0.2),
                           ),
                   ),
                   child: Text(
@@ -294,7 +294,7 @@ class _MessageInputBar extends StatelessWidget {
         border: const Border(top: BorderSide(color: AppColors.divider)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 4,
             offset: const Offset(0, -2),
           ),

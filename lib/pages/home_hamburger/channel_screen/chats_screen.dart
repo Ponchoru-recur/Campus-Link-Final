@@ -1175,7 +1175,7 @@ class _DrawerItem extends StatelessWidget {
           fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
-      tileColor: isActive ? AppColors.primary.withOpacity(0.06) : null,
+      tileColor: isActive ? AppColors.primary.withValues(alpha: 0.06) : null,
       onTap: onTap,
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),

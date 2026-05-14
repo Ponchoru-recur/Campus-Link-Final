@@ -3,8 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:luminescence/models/task.dart';
 import 'package:luminescence/themes/app_colors.dart';
-import 'package:luminescence/services/storage_service.dart';
-import 'package:file_picker/file_picker.dart';
 
 /// Modal dialog for faculty to create a task inside a chat.
 /// Sends a task-type message into the chat upon creation.
@@ -31,12 +29,8 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   DateTime? _deadline;
-  bool _allowSubmissions = false;
-  final List<TaskAttachment> _attachments = [];
-  final _storageService = StorageService();
-  // Store pending attachments with their local file paths for upload during task creation
-  final List<Map<String, String>> _pendingAttachments = []; // {name, path, mimeType}
   bool _isSaving = false;
+  final List<TaskLink> _links = [];
 
   String _getCurrentUserName() {
     final email = FirebaseAuth.instance.currentUser?.email ?? '';
@@ -81,43 +75,56 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
     });
   }
 
-  Future<void> _addAttachment() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: false,
-        withData: false,
-      );
-      if (result == null || result.files.isEmpty) return;
-      final file = result.files.first;
-      if (file.path == null) return;
-      setState(() {
-        _attachments.add(TaskAttachment(
-          fileName: file.name,
-          fileUrl: '', // Will be set after upload during task creation
-          mimeType: file.extension != null ? 'application/${file.extension}' : null,
-        ));
-        _pendingAttachments.add({
-          'name': file.name,
-          'path': file.path!,
-          'mimeType': file.extension != null ? 'application/${file.extension}' : '',
-        });
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to pick file: $e')),
-        );
-      }
+  Future<void> _addLink() async {
+    final nameController = TextEditingController();
+    final urlController = TextEditingController();
+    final result = await showDialog<TaskLink>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Link'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Link Name',
+                hintText: 'e.g., Course Materials',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: urlController,
+              decoration: const InputDecoration(
+                labelText: 'URL',
+                hintText: 'https://',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.url,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              final url = urlController.text.trim();
+              if (name.isEmpty || url.isEmpty) return;
+              Navigator.pop(ctx, TaskLink(title: name, url: url));
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (result != null) {
+      setState(() => _links.add(result));
     }
-  }
-
-  void _removeAttachment(int index) {
-    setState(() {
-      _attachments.removeAt(index);
-      if (index < _pendingAttachments.length) {
-        _pendingAttachments.removeAt(index);
-      }
-    });
   }
 
   Future<void> _createTask() async {
@@ -130,29 +137,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
       final userName = _getCurrentUserName();
       final taskId = FirebaseFirestore.instance.collection('tasks').doc().id;
 
-      // Upload pending attachments to Firebase Storage with real taskId
-      final List<TaskAttachment> uploadedAttachments = [];
-      for (var i = 0; i < _pendingAttachments.length; i++) {
-        final pending = _pendingAttachments[i];
-        try {
-          final url = await _storageService.uploadTaskAttachment(
-            taskId: taskId,
-            filePath: pending['path']!,
-            fileName: pending['name']!,
-          );
-          uploadedAttachments.add(TaskAttachment(
-            fileName: pending['name']!,
-            fileUrl: url,
-            mimeType: pending['mimeType']!.isNotEmpty ? pending['mimeType'] : null,
-          ));
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to upload ${pending['name']}: $e')),
-            );
-          }
-        }
-      }
+      // Use the collected links from _links list
 
       // Fetch target UIDs
       List<String> targetUids = [user.uid];
@@ -182,8 +167,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
         chatType: widget.chatType,
         createdAt: DateTime.now(),
         deadline: _deadline,
-        allowSubmissions: _allowSubmissions,
-        attachments: uploadedAttachments,
+        links: _links,
         targetUids: targetUids,
       );
 
@@ -204,7 +188,7 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
       await messagesRef.add({
         'senderId': user.uid,
         'senderName': userName,
-        'text': _descController.text.trim(),
+        'text': '📋 ${_titleController.text.trim()}\n\n${_descController.text.trim()}',
         'timestamp': FieldValue.serverTimestamp(),
         'type': 'task',
         'taskId': taskId,
@@ -388,31 +372,15 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
                 ),
                 const SizedBox(height: 8),
 
-                // Allow submissions checkbox
-                CheckboxListTile(
-                  value: _allowSubmissions,
-                  onChanged: (v) => setState(() => _allowSubmissions = v ?? false),
-                  title: const Text('Allow student submissions',
-                      style: TextStyle(fontSize: 14)),
-                  subtitle: const Text('Students can submit files or text in response',
-                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  activeColor: AppColors.primary,
-                ),
-                const SizedBox(height: 8),
-
-                // Attachments section
+                // Links section
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Attachments (${_attachments.length})',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                    const Icon(Icons.link, size: 18, color: AppColors.textSecondary),
+                    const SizedBox(width: 8),
                     TextButton.icon(
-                      onPressed: _addAttachment,
-                      icon: const Icon(Icons.attach_file, size: 16),
-                      label: const Text('Add File', style: TextStyle(fontSize: 13)),
+                      onPressed: _addLink,
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Add Link'),
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.primary,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -420,29 +388,32 @@ class _TaskCreationDialogState extends State<TaskCreationDialog> {
                     ),
                   ],
                 ),
-                if (_attachments.isNotEmpty)
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 120),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: _attachments.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, i) {
-                        final a = _attachments[i];
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.insert_drive_file, color: AppColors.primary, size: 20),
-                          title: Text(a.fileName, style: const TextStyle(fontSize: 13)),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.close, size: 16),
-                            onPressed: () => _removeAttachment(i),
-                            splashRadius: 16,
-                          ),
-                        );
-                      },
-                    ),
+
+                // Links chips display
+                if (_links.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: _links.map((link) {
+                      return Chip(
+                        label: Text(
+                          link.title,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        deleteIcon: const Icon(Icons.close, size: 14),
+                        onDeleted: () => setState(() => _links.remove(link)),
+                        backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      );
+                    }).toList(),
                   ),
-                const SizedBox(height: 20),
+                ],
+
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
 
                 // Actions
                 Row(

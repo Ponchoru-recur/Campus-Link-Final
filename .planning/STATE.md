@@ -41,3 +41,4 @@ None completed yet.
 - 2026-05-05: Phase 4 Plan 1 completed — search bar UI, user cache, local search with domain regex
 - 2026-05-04: Phase 1 context gathered — decisions: `direct_messages` collection, `members[]` field, Map `unreadCount`, create Dart models
 - 2026-05-04: Project initialized, roadmap created (5 phases, 15 v1 requirements mapped)
+- 2026-05-14: Phase 6 added: Adding new features related to Create Tasks
