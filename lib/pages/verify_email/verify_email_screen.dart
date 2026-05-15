@@ -21,6 +21,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   bool _isTimedOut = false;
   bool _isInitialized = false;
   String? _errorMessage;
+  SharedPreferences? _prefs;
   String _email = '';
   String _role = 'student';
 
@@ -32,21 +33,19 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   Future<void> _initialize() async {
     try {
+      _prefs = await SharedPreferences.getInstance();
       if (widget.email != null) {
         _email = widget.email!;
         if (widget.role != null) {
           _role = widget.role!;
         } else {
-          final prefs = await SharedPreferences.getInstance();
-          _role = prefs.getString('pending_role') ?? 'student';
+          _role = _prefs!.getString('pending_role') ?? 'student';
         }
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('pending_email', _email);
-        await prefs.setString('pending_role', _role);
+        await _prefs!.setString('pending_email', _email);
+        await _prefs!.setString('pending_role', _role);
       } else {
-        final prefs = await SharedPreferences.getInstance();
-        _email = prefs.getString('pending_email') ?? '';
-        _role = prefs.getString('pending_role') ?? 'student';
+        _email = _prefs!.getString('pending_email') ?? '';
+        _role = _prefs!.getString('pending_role') ?? 'student';
       }
     } catch (e) {
       _errorMessage = 'Failed to load data: $e';
@@ -118,9 +117,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
             'emailVerified': true,
           });
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('pending_email');
-      await prefs.remove('pending_role');
+      await _prefs!.remove('pending_email');
+      await _prefs!.remove('pending_role');
 
       if (mounted) {
         Navigator.of(
@@ -139,9 +137,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   Future<void> _onTimeout() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('pending_email');
-      await prefs.remove('pending_role');
+      await _prefs!.remove('pending_email');
+      await _prefs!.remove('pending_role');
       final user = FirebaseAuth.instance.currentUser;
       await user?.delete();
     } catch (_) {}
@@ -153,9 +150,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       await user?.delete();
     } catch (_) {}
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('pending_email');
-      await prefs.remove('pending_role');
+      await _prefs!.remove('pending_email');
+      await _prefs!.remove('pending_role');
     } catch (_) {}
     if (mounted) {
       Navigator.of(context).pushNamedAndRemoveUntil(

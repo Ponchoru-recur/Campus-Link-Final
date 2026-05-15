@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:app_links/app_links.dart';
 import 'dart:developer';
@@ -10,15 +11,23 @@ class DeepLinkListener extends StatefulWidget {
 }
 
 class _DeepLinkListenerState extends State<DeepLinkListener> {
+  StreamSubscription<Uri>? _sub;
+
   @override
   void initState() {
     final appLinks = AppLinks(); // AppLinks is singleton
 
     // Subscribe to all events (initial link and further)
-    final sub = appLinks.uriLinkStream.listen((uri) {
+    _sub = appLinks.uriLinkStream.listen((uri) {
       log('URI: ${uri.toString()}');
     });
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
   }
 
   @override

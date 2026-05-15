@@ -27,8 +27,8 @@ class MyApp extends StatelessWidget {
       themeMode: ThemeMode.light,
       home: const AuthWrapper(),
       routes: {
-        '/roleSelection': (context) => RoleSelectionScreen(),
-        '/login': (context) => LoginScreen(),
+        '/roleSelection': (context) => const RoleSelectionScreen(),
+        '/login': (context) => const LoginScreen(),
         '/chatScreen': (context) => const ChatsScreen(),
         '/updatesTasks': (context) => const UpdatesTasksScreen(),
         '/tasks': (context) => const TaskListScreen(),
@@ -52,7 +52,7 @@ class AuthWrapper extends StatelessWidget {
         }
         final user = snapshot.data;
         if (user == null) {
-          return RoleSelectionScreen();
+          return const RoleSelectionScreen();
         }
         return FutureBuilder<Widget>(
           future: _resolveUser(user),
@@ -65,7 +65,7 @@ class AuthWrapper extends StatelessWidget {
             if (snap.hasData) {
               return snap.data!;
             }
-            return RoleSelectionScreen();
+            return const RoleSelectionScreen();
           },
         );
       },

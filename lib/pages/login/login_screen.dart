@@ -20,6 +20,15 @@ class _LoginScreenState extends State<LoginScreen> {
   String _role = 'student'; // default
   bool _isLoading = false;
 
+  static final _emailRegex = RegExp(r'^[a-zA-Z]+\.[a-zA-Z]+@carsu\.edu\.ph$');
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -37,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return "Email is required";
     }
 
-    final regex = RegExp(r'^[a-zA-Z]+\.[a-zA-Z]+@carsu\.edu\.ph$');
+    final regex = _emailRegex;
 
     if (!regex.hasMatch(value)) {
       return "Use format: Juan.DelaCruz@carsu.edu.ph";

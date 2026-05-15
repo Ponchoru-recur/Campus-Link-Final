@@ -9,15 +9,22 @@ class ResetPasswordScreen extends StatefulWidget {
 }
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
+  static final _emailRegex = RegExp(r'^[a-zA-Z]+\.[a-zA-Z]+@carsu\.edu\.ph$');
   final _emailController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
 
   String? validateEmail(String? value) {
     if (value == null || value.isEmpty) {
       return "Email is required";
     }
-    final regex = RegExp(r'^[a-zA-Z]+\.[a-zA-Z]+@carsu\.edu\.ph$');
+    final regex = _emailRegex;
     if (!regex.hasMatch(value)) {
       return "Use format: Juan.DelaCruz@carsu.edu.ph";
     }
