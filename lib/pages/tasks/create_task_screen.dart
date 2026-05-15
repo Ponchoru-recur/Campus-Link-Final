@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:luminescence/models/task.dart';
 import 'package:luminescence/services/task_service.dart';
 import 'package:luminescence/themes/app_colors.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 
 class CreateTaskScreen extends StatefulWidget {
@@ -15,23 +16,146 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _linksController = TextEditingController();
+  final List<TaskLink> _links = [];
   DateTime? _deadline;
   bool _isSubmitting = false;
 
   final _taskService = TaskService();
 
+  Future<void> _openLink(TaskLink link) async {
+    final uri = Uri.tryParse(link.url);
+    if (uri == null || !uri.hasScheme || (!uri.isScheme('http') && !uri.isScheme('https'))) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invalid URL: ${link.url}'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No app available to open this link'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not open link'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
   Future<void> _selectDeadline() async {
+    final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: _deadline ?? DateTime.now().add(const Duration(days: 7)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: _deadline ?? now.add(const Duration(days: 7)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
     );
-    if (picked != null) {
-      setState(() {
-        _deadline = picked;
-      });
+    if (picked == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 23, minute: 59),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (time == null || !mounted) return;
+    setState(() {
+      _deadline = DateTime(picked.year, picked.month, picked.day, time.hour, time.minute);
+    });
+  }
+
+  Future<void> _addLink() async {
+    final nameController = TextEditingController();
+    final urlController = TextEditingController();
+    final result = await showDialog<TaskLink>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Add Link'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(
+                labelText: 'Link Name',
+                hintText: 'e.g., Course Materials',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                filled: true,
+                fillColor: Colors.grey[50],
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: urlController,
+              decoration: InputDecoration(
+                labelText: 'URL',
+                hintText: 'https://',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                filled: true,
+                fillColor: Colors.grey[50],
+              ),
+              keyboardType: TextInputType.url,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              final url = urlController.text.trim();
+              if (name.isEmpty || url.isEmpty) return;
+              Navigator.pop(ctx, TaskLink(title: name, url: url));
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (result != null) {
+      setState(() => _links.add(result));
     }
   }
 
@@ -48,42 +172,29 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     try {
       final deadlineStr = DateFormat('yyyy-MM-ddTHH:mm:ss').format(_deadline!);
 
-      // Parse links from input (one per line or comma-separated)
-      final List<TaskLink> links = [];
-      final linkText = _linksController.text.trim();
-      if (linkText.isNotEmpty) {
-        // Split by newline or comma
-        final linkLines = linkText.split(RegExp(r'[\n,]'));
-        for (final line in linkLines) {
-          final trimmed = line.trim();
-          if (trimmed.isNotEmpty) {
-            // If it looks like a URL, use it as both title and URL
-            final Uri? uri = Uri.tryParse(trimmed);
-            if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
-              links.add(TaskLink(title: trimmed, url: trimmed));
-            } else {
-              // If not a valid URL, still add it but show warning or handle appropriately
-              links.add(TaskLink(title: trimmed, url: trimmed));
-            }
-          }
-        }
-      }
-
       await _taskService.createTask(
         title: _titleController.text,
         description: _descriptionController.text,
         deadline: deadlineStr,
-        links: links,
+        links: _links,
       );
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task created successfully')),
+        SnackBar(
+          content: const Text('Task created successfully'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(
+          content: Text('Error: $e'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -91,73 +202,342 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   }
 
   @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        title: const Text('Create Task'),
+        elevation: 0,
+        title: const Text('Create Task',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
-          child: ListView(
+          child: Column(
             children: [
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  border: OutlineInputBorder(),
+              // Title Section
+              _SectionCard(
+                icon: Icons.assignment,
+                title: 'Task Information',
+                child: Column(
+                  children: [
+                    TextFormField(
+                      controller: _titleController,
+                      maxLength: 100,
+                      decoration: _inputDecoration(
+                        label: 'Task Title',
+                        hint: 'Enter a clear task title...',
+                        icon: Icons.title,
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Title is required';
+                        if (v.trim().length < 3) return 'Must be at least 3 characters';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _descriptionController,
+                      maxLines: 5,
+                      minLines: 3,
+                      maxLength: 500,
+                      decoration: _inputDecoration(
+                        label: 'Description',
+                        hint: 'Describe what needs to be done...',
+                        icon: Icons.description_outlined,
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Task description is required';
+                        if (v.trim().length < 3) return 'Must be at least 3 characters';
+                        return null;
+                      },
+                    ),
+                  ],
                 ),
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Title required' : null,
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
+
+              // Deadline Section
+              _SectionCard(
+                icon: Icons.calendar_month,
+                title: 'Deadline',
+                child: Column(
+                  children: [
+                    InkWell(
+                      onTap: _selectDeadline,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(Icons.calendar_today,
+                                  size: 18, color: AppColors.primary),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _deadline == null
+                                        ? 'Tap to set deadline'
+                                        : DateFormat('EEEE, MMMM d, y').format(_deadline!),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w500,
+                                      color: _deadline == null
+                                          ? Colors.grey[500]
+                                          : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  if (_deadline != null)
+                                    Text(
+                                      '${_deadline!.hour.toString().padLeft(2, '0')}:${_deadline!.minute.toString().padLeft(2, '0')}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (_deadline != null)
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 18),
+                                onPressed: () => setState(() => _deadline = null),
+                                splashRadius: 18,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                maxLines: 3,
               ),
               const SizedBox(height: 16),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  _deadline == null
-                      ? 'Select deadline'
-                      : 'Deadline: ${DateFormat('yyyy-MM-dd').format(_deadline!)}',
+
+              // Links Section
+              _SectionCard(
+                icon: Icons.link,
+                title: 'Attached Links',
+                trailing: TextButton.icon(
+                  onPressed: _addLink,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Link'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: _selectDeadline,
+                child: _links.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Icon(Icons.link_off, size: 16, color: Colors.grey[400]),
+                            const SizedBox(width: 8),
+                            Text('No links added yet',
+                                style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                          ],
+                        ),
+                      )
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _links.map((link) {
+                          return InkWell(
+                            onTap: () => _openLink(link),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.link, size: 14, color: AppColors.primary),
+                                  const SizedBox(width: 6),
+                                  Text(link.title,
+                                      style: const TextStyle(
+                                          fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w500)),
+                                  const SizedBox(width: 6),
+                                  GestureDetector(
+                                    onTap: () => setState(() => _links.remove(link)),
+                                    child: Icon(Icons.close, size: 14, color: Colors.grey[500]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
               ),
-              const SizedBox(height: 16),
-              // Links section
-              TextFormField(
-                controller: _linksController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: 'Links (one per line or comma-separated)',
-                  border: OutlineInputBorder(),
+              const SizedBox(height: 32),
+
+              // Submit Button
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: _isSubmitting ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    shadowColor: AppColors.primary.withValues(alpha: 0.4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.task_alt, size: 22),
+                            SizedBox(width: 10),
+                            Text('Create Task',
+                                style: TextStyle(
+                                    fontSize: 17, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _isSubmitting ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(50),
-                ),
-                child: _isSubmitting
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Create Task'),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required String label,
+    required String hint,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon, size: 20),
+      filled: true,
+      fillColor: Colors.grey[50],
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.grey[300]!),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.grey[200]!),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.urgentRed),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      counterText: '',
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget? trailing;
+  final Widget child;
+
+  const _SectionCard({
+    required this.icon,
+    required this.title,
+    this.trailing,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 12, 8),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 16, color: AppColors.primary),
+                ),
+                const SizedBox(width: 10),
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary)),
+                const Spacer(),
+                ?trailing,
+              ],
+            ),
+          ),
+          const Divider(height: 1, indent: 18, endIndent: 18),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: child,
+          ),
+        ],
       ),
     );
   }

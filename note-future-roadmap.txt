@@ -1,0 +1,94 @@
+Good. product and marketing match
+
+  Called plugin:buildpartner:tools (ctrl+o to expand)
+  ⎿  Allowed by PermissionRequest hook
+
+● Your Situation
+
+  Campus Link solve real pain: Caraga State University instructors juggle 3 platforms (university website,
+  Google Classroom, Messenger) to share information, and students still miss updates when absent. No single
+  source of truth. No reliable notification. Firebase limitation on images/files forced you back to core
+  strength — pure information delivery.
+
+  That constraint is actually your advantage. You cannot compete on file sharing (Google Classroom owns that),
+  so you compete on reliability, simplicity, and accountability — three things Messenger and Google Classroom
+  are terrible at.
+
+  Framework: Paul Graham's "Do Things That Don't Scale" + Pieter Levels' Ship Fast
+
+  Two frameworks converge here:
+
+  PG: Your first users (Caraga students + faculty) need manual recruitment, individual delight, and a "contained
+   fire" strategy. Dominate one department, one batch of students, one concrete use case before expanding.
+
+  Levels: Ship features fast, charge nothing (university context), iterate based on what users actually do. 70%
+  completion is shipping. Features that do not get used — kill them.
+
+  Recommendation: 5 Feature Directions That Beat Messenger
+
+  1. Information FOMO Lock (High Impact, Low Build)
+
+  Messenger fails because information drowns in group chat noise. Campus Link should guarantee no student misses
+   critical info.
+
+  Feature: "Missed While Absent" digest. When a student opens the app after being offline >4 hours, show a
+  summary screen: "You missed: 2 new tasks from Prof. Santos, 1 announcement in CS-301 GC, 1 deadline changed."
+  This single feature is more valuable than any Messenger feature for academic use.
+
+  Why it wins: Messenger does not know what is "important." Campus Link does — because tasks and announcements
+  are typed differently from casual chat.
+
+  2. Accountability Layer (Your Create Task Is Already a Seed)
+
+  Your Create Task lets faculty send title + description + links. Add:
+
+  - Deadline acknowledgment: Student must tap "Acknowledge" (not just read). Faculty sees who has/has not
+  acknowledged. No more "I did not know."
+  - Auto-escalation: If a student has not acknowledged a task within 24 hours, push a notification. After 48
+  hours, notify the faculty member. After 72 hours, auto-email the student's Carasu email as backup.
+  - Completion proof (text-based): Since images/files are out, let students submit a text response or a link as
+  proof. "Submit GitHub repo URL" or "Submit your answer in 500 characters."
+
+  Why it wins: Messenger has zero task accountability. Google Classroom has it but buried. Yours is front and
+  center.
+
+  3. Unified Calendar Feed
+
+  Every task, deadline, announcement, and class schedule lives in one scrollable timeline. Notifications push to
+   the feed. The student NEVER checks Messenger for school info.
+
+  Why it wins: Messenger is real-time chat. Campus Link is an academic information hub. Different jobs to be
+  done.
+
+  4. Confirmation Chain (The Viral Loop)
+
+  When a faculty creates a task or announcement, the student must confirm receipt. That confirmation is visible
+  to the class: "Juan confirmed Task 1." This creates social pressure to actually read and acknowledge. It also
+  creates FOMO — students open the app because they see classmates confirming.
+
+  Why it wins: Messenger cannot do this. Group admins cannot see who read what (unless they count reactions,
+  which nobody does). Campus Link gives faculty actual visibility.
+
+  5. "What Changed Since Last Time" Auto-Summary
+
+  When a student opens the app after being away, auto-generated plain-text summary: "Since your last visit 3
+  days ago: 5 new messages in CS-301, 2 tasks posted, 1 deadline extended to Friday."
+
+  Why it wins: Messenger greets you with the last message, not the most important one. Campus Link surfaces
+  priority first.
+
+  Positioning: The Anti-Messenger
+
+  Your marketing message to faculty: "Post it once in Campus Link. Students get it. They acknowledge it. You can
+   see who knows and who does not. No chasing students in Messenger. No cross-posting to Google Classroom."
+
+  To students: "Open Campus Link, see everything you missed. No scrolling through 200 Messenger messages. No
+  'may nakalimutan ka bang assignment?' panic."
+
+  Next Step
+
+  Pick 1 feature from above. Build it this week. Test with 1 faculty member and their class (10-15 students). If
+   they use it daily without reminders, you have found your wedge.
+
+  I recommend starting with Deadline Acknowledgment (Feature #2) since your Create Task system is already built
+  — it is the shortest path to a differentiated experience.

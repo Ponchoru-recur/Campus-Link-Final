@@ -55,7 +55,13 @@
       "Bash(Get-Content *)",
       "Skill(gsd-phase)",
       "Skill(gsd-resume-work)",
-      "PowerShell(gsd-sdk *)"
+      "PowerShell(gsd-sdk *)",
+      "mcp__ide__executeCode",
+      "Bash(curl -fsSL buildpartner.ai/install.sh)",
+      "Bash(sh -s -- --token sk_86bfdab93194482fb7b3c8b2)",
+      "Bash(npx *)",
+      "Bash(go version *)",
+      "Bash(xargs ls -lt)"
     ]
   }
 }

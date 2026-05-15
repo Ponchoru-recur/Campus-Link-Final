@@ -143,10 +143,23 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
   }
 
   Future<void> _launchLink(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || (!uri.isScheme('http') && !uri.isScheme('https'))) {
+      return;
     }
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No app available to open this link'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {}
   }
 
   String _formatDate(DateTime? dt) {
@@ -596,10 +609,48 @@ class _EditTaskScreenState extends State<_EditTaskScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
-  final _linksController = TextEditingController();
   DateTime? _deadline;
   bool _isSaving = false;
+  final List<TaskLink> _links = [];
   final _taskService = TaskService();
+
+  Future<void> _openLink(TaskLink link) async {
+    final uri = Uri.tryParse(link.url);
+    if (uri == null || !uri.hasScheme || (!uri.isScheme('http') && !uri.isScheme('https'))) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invalid URL: ${link.url}'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No app available to open this link'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not open link'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -607,28 +658,112 @@ class _EditTaskScreenState extends State<_EditTaskScreen> {
     _titleController = TextEditingController(text: widget.task.title);
     _descController = TextEditingController(text: widget.task.description);
     _deadline = widget.task.deadline;
-    _linksController.text = widget.task.links
-        .map((l) => l.url)
-        .join('\n');
+    _links.addAll(widget.task.links);
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
-    _linksController.dispose();
     super.dispose();
   }
 
   Future<void> _selectDeadline() async {
+    final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: _deadline ?? DateTime.now().add(const Duration(days: 7)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: _deadline ?? now.add(const Duration(days: 7)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
     );
-    if (picked != null) {
-      setState(() => _deadline = picked);
+    if (picked == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 23, minute: 59),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (time == null || !mounted) return;
+    setState(() {
+      _deadline = DateTime(picked.year, picked.month, picked.day, time.hour, time.minute);
+    });
+  }
+
+  Future<void> _addLink() async {
+    final nameController = TextEditingController();
+    final urlController = TextEditingController();
+    final result = await showDialog<TaskLink>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Add Link'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(
+                labelText: 'Link Name',
+                hintText: 'e.g., Course Materials',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                filled: true,
+                fillColor: Colors.grey[50],
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: urlController,
+              decoration: InputDecoration(
+                labelText: 'URL',
+                hintText: 'https://',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                filled: true,
+                fillColor: Colors.grey[50],
+              ),
+              keyboardType: TextInputType.url,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              final url = urlController.text.trim();
+              if (name.isEmpty || url.isEmpty) return;
+              Navigator.pop(ctx, TaskLink(title: name, url: url));
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (result != null) {
+      setState(() => _links.add(result));
     }
   }
 
@@ -636,17 +771,6 @@ class _EditTaskScreenState extends State<_EditTaskScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
-      final List<TaskLink> links = [];
-      final linkText = _linksController.text.trim();
-      if (linkText.isNotEmpty) {
-        for (final line in linkText.split(RegExp(r'[\n,]'))) {
-          final trimmed = line.trim();
-          if (trimmed.isNotEmpty) {
-            links.add(TaskLink(title: trimmed, url: trimmed));
-          }
-        }
-      }
-
       await _taskService.updateTask(
         taskId: widget.task.id,
         title: _titleController.text,
@@ -655,17 +779,25 @@ class _EditTaskScreenState extends State<_EditTaskScreen> {
             ? DateFormat('yyyy-MM-ddTHH:mm:ss').format(_deadline!)
             : null,
         clearDeadline: _deadline == null,
-        links: links,
+        links: _links,
       );
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task updated')),
+        SnackBar(
+          content: const Text('Task updated'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e')),
+          SnackBar(
+            content: Text('Failed: $e'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         );
       }
     } finally {
@@ -676,105 +808,365 @@ class _EditTaskScreenState extends State<_EditTaskScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        title: const Text('Edit Task'),
+        elevation: 0,
+        title: const Text('Edit Task',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+        ),
         actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _save,
-            child: _isSaving
-                ? const SizedBox(
-                    width: 20, height: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                : const Text('Save', style: TextStyle(color: Colors.white)),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton(
+              onPressed: _isSaving ? null : _save,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.white.withValues(alpha: 0.2),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              ),
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text('Save',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
-          child: ListView(
+          child: Column(
             children: [
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) => v == null || v.isEmpty ? 'Title required' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _descController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  _deadline == null
-                      ? 'No deadline'
-                      : 'Deadline: ${DateFormat('yyyy-MM-dd').format(_deadline!)}',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+              // Task Information
+              _EditSectionCard(
+                icon: Icons.assignment,
+                title: 'Task Information',
+                child: Column(
                   children: [
-                    if (_deadline != null)
-                      IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () => setState(() => _deadline = null),
+                    TextFormField(
+                      controller: _titleController,
+                      maxLength: 100,
+                      decoration: _editInputDecoration(
+                        label: 'Task Title',
+                        hint: 'Enter task title...',
+                        icon: Icons.title,
                       ),
-                    const Icon(Icons.calendar_today),
+                      validator: (v) =>
+                          v == null || v.isEmpty ? 'Title required' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _descController,
+                      maxLines: 5,
+                      minLines: 3,
+                      maxLength: 500,
+                      decoration: _editInputDecoration(
+                        label: 'Description',
+                        hint: 'Describe the task...',
+                        icon: Icons.description_outlined,
+                      ),
+                    ),
                   ],
                 ),
-                onTap: _selectDeadline,
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _linksController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Links (one per line)',
-                  border: OutlineInputBorder(),
+
+              // Deadline
+              _EditSectionCard(
+                icon: Icons.calendar_month,
+                title: 'Deadline',
+                child: InkWell(
+                  onTap: _selectDeadline,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.calendar_today,
+                              size: 18, color: AppColors.primary),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _deadline == null
+                                    ? 'No deadline set'
+                                    : DateFormat('EEEE, MMMM d, y')
+                                        .format(_deadline!),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                  color: _deadline == null
+                                      ? Colors.grey[500]
+                                      : AppColors.textPrimary,
+                                ),
+                              ),
+                              if (_deadline != null)
+                                Text(
+                                  '${_deadline!.hour.toString().padLeft(2, '0')}:${_deadline!.minute.toString().padLeft(2, '0')}',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey[500]),
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (_deadline != null)
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () => setState(() => _deadline = null),
+                            splashRadius: 18,
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Delete Task'),
-                      content: const Text('Delete this task for everyone?'),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          style: TextButton.styleFrom(foregroundColor: AppColors.urgentRed),
-                          child: const Text('Delete'),
+
+              // Links
+              _EditSectionCard(
+                icon: Icons.link,
+                title: 'Attached Links',
+                trailing: TextButton.icon(
+                  onPressed: _addLink,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Link'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                child: _links.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Icon(Icons.link_off,
+                                size: 16, color: Colors.grey[400]),
+                            const SizedBox(width: 8),
+                            Text('No links attached',
+                                style: TextStyle(
+                                    color: Colors.grey[400], fontSize: 13)),
+                          ],
                         ),
-                      ],
-                    ),
-                  );
-                  if (confirmed == true) {
-                    await _taskService.deleteTask(widget.task.id);
-                    if (!mounted) return;
-                    Navigator.pop(context);
-                  }
-                },
-                icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.urgentRed),
-                label: const Text('Delete this task', style: TextStyle(color: AppColors.urgentRed)),
+                      )
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _links.map((link) {
+                          return InkWell(
+                            onTap: () => _openLink(link),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color:
+                                        AppColors.primary.withValues(alpha: 0.2)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.link,
+                                      size: 14, color: AppColors.primary),
+                                  const SizedBox(width: 6),
+                                  Text(link.title,
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w500)),
+                                  const SizedBox(width: 6),
+                                  GestureDetector(
+                                    onTap: () =>
+                                        setState(() => _links.remove(link)),
+                                    child: Icon(Icons.close,
+                                        size: 14, color: Colors.grey[500]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+              ),
+              const SizedBox(height: 24),
+
+              // Delete button
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                        title: const Text('Delete Task'),
+                        content: const Text(
+                            'Delete this task for everyone? This action cannot be undone.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.urgentRed,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      await _taskService.deleteTask(widget.task.id);
+                      if (!mounted) return;
+                      Navigator.pop(context);
+                    }
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Delete this task'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.urgentRed,
+                    side: BorderSide(color: AppColors.urgentRed.withValues(alpha: 0.3)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  InputDecoration _editInputDecoration({
+    required String label,
+    required String hint,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon, size: 20),
+      filled: true,
+      fillColor: Colors.grey[50],
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.grey[300]!),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.grey[200]!),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      counterText: '',
+    );
+  }
+}
+
+class _EditSectionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget? trailing;
+  final Widget child;
+
+  const _EditSectionCard({
+    required this.icon,
+    required this.title,
+    this.trailing,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 12, 8),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 16, color: AppColors.primary),
+                ),
+                const SizedBox(width: 10),
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary)),
+                const Spacer(),
+                ?trailing,
+              ],
+            ),
+          ),
+          const Divider(height: 1, indent: 18, endIndent: 18),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: child,
+          ),
+        ],
       ),
     );
   }

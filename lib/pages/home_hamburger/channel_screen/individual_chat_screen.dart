@@ -12,6 +12,11 @@ import 'package:luminescence/models/task.dart';
 import 'package:luminescence/themes/app_colors.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+final _urlRegex = RegExp(
+  r'(https?://[^\s<]+)',
+  caseSensitive: false,
+);
+
 /// The full conversation screen for a 1-on-1 DIRECT MESSAGE.
 /// Firestore-backed with real-time sync, replaces old instructor chat placeholder.
 class IndividualChatScreen extends StatefulWidget {
@@ -561,6 +566,70 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
+  Widget _buildLinkifiedText(String text, bool isMe) {
+    final matches = _urlRegex.allMatches(text).toList();
+    if (matches.isEmpty) {
+      return Text(
+        text,
+        style: TextStyle(
+          color: isMe ? Colors.white : AppColors.textPrimary,
+          fontSize: 14,
+        ),
+      );
+    }
+    final spans = <InlineSpan>[];
+    int lastEnd = 0;
+    final linkColor = isMe ? Colors.white.withValues(alpha: 0.85) : AppColors.primary;
+
+    for (final match in matches) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastEnd, match.start),
+          style: TextStyle(color: isMe ? Colors.white : AppColors.textPrimary, fontSize: 14),
+        ));
+      }
+      final url = match.group(1)!;
+      spans.add(WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: GestureDetector(
+          onTap: () async {
+            final uri = Uri.tryParse(url);
+            if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            decoration: BoxDecoration(
+              color: linkColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              url,
+              style: TextStyle(
+                color: linkColor,
+                fontSize: 14,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        ),
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastEnd),
+        style: TextStyle(color: isMe ? Colors.white : AppColors.textPrimary, fontSize: 14),
+      ));
+    }
+    return RichText(
+      text: TextSpan(children: spans),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isTask = message.type == 'task';
@@ -629,13 +698,7 @@ class _MessageBubble extends StatelessWidget {
                               fontStyle: FontStyle.italic,
                             ),
                           )
-                        : Text(
-                            message.text,
-                            style: TextStyle(
-                              color: isMe ? Colors.white : AppColors.textPrimary,
-                              fontSize: 14,
-                            ),
-                          ),
+                        : _buildLinkifiedText(message.text, isMe),
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
@@ -889,8 +952,17 @@ class _TaskBubbleState extends State<_TaskBubble> {
                       children: links.map((link) => InkWell(
                         onTap: () async {
                           final uri = Uri.tryParse(link.url);
-                          if (uri != null && await canLaunchUrl(uri)) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            } else if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('No app available to open this link'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
                           }
                         },
                         child: Container(
