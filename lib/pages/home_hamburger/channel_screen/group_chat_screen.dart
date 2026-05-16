@@ -53,7 +53,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   final List<Message> _messages = [];
 
   void _sendMessage() async {
-    final text = _controller.text.trim();
+    String text = _controller.text.trim();
     if (text.isEmpty) return;
 
     final user = FirebaseAuth.instance.currentUser;
@@ -79,6 +79,33 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           .doc(_chatId)
           .collection('messages');
 
+      // Parse @mentions from message text (D-02, D-04)
+      final mentionRegex = RegExp(r'@(\w+(?: \w+)*)');
+      final mentionMatches = mentionRegex.allMatches(text);
+      final mentionedUids = <String>[];
+      for (final match in mentionMatches) {
+        final displayName = match.group(1)!;
+        final uid = _uidToName.entries
+            .firstWhere(
+              (e) => e.value.toLowerCase() == displayName.toLowerCase(),
+              orElse: () => const MapEntry('', ''),
+            )
+            .key;
+        if (uid.isNotEmpty && uid != user.uid) mentionedUids.add(uid);
+      }
+
+      // @everyone: faculty-only pinned message (D-05, D-06)
+      final hasEveryone = text.contains('@everyone');
+      DateTime? pinnedUntil;
+      if (hasEveryone) {
+        if (_isFaculty) {
+          pinnedUntil = DateTime.now().add(const Duration(hours: 24));
+        } else {
+          // Strip @everyone from non-faculty messages silently
+          text = text.replaceAll('@everyone', '').trim();
+        }
+      }
+
       await messagesRef.add({
         'senderId': user.uid,
         'senderName': senderName,
@@ -86,6 +113,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'timestamp': FieldValue.serverTimestamp(),
         'type': 'text',
         'readBy': [user.uid],
+        'mentionedUids': mentionedUids, // NEW per D-04
+        if (pinnedUntil != null)
+          'pinnedUntil': Timestamp.fromDate(pinnedUntil), // NEW per D-11
       });
 
       await firestore.collection('group_chats').doc(_chatId).update({
