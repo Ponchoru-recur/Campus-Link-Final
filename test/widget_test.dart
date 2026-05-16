@@ -1,30 +1,49 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:luminescence/main.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/message.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Message model — Phase 7 fields', () {
+    test('Message can be created without mentions', () {
+      final msg = Message(
+        id: '1',
+        senderId: 'user1',
+        senderName: 'Test User',
+        text: 'Hello',
+        timestamp: DateTime.now(),
+        isMe: false,
+      );
+      expect(msg.mentionedUids, isEmpty);
+      expect(msg.pinnedUntil, isNull);
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('Message can be created with mentionedUids', () {
+      final msg = Message(
+        id: '2',
+        senderId: 'user1',
+        senderName: 'Test User',
+        text: 'Hello @Other User',
+        timestamp: DateTime.now(),
+        isMe: false,
+        mentionedUids: ['otherUser'],
+      );
+      expect(msg.mentionedUids.length, 1);
+      expect(msg.mentionedUids.first, 'otherUser');
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('Message can be created with pinnedUntil', () {
+      final pinnedUntil = DateTime.now().add(const Duration(hours: 24));
+      final msg = Message(
+        id: '3',
+        senderId: 'user1',
+        senderName: 'Test User',
+        text: '@everyone announcement',
+        timestamp: DateTime.now(),
+        isMe: false,
+        mentionedUids: [],
+        pinnedUntil: pinnedUntil,
+      );
+      expect(msg.pinnedUntil, isNotNull);
+      expect(msg.pinnedUntil!.difference(DateTime.now()).inHours, greaterThanOrEqualTo(23));
+    });
   });
 }
