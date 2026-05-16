@@ -1291,6 +1291,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                             formatTime: _formatTime,
                           )
                       : null,
+                  currentUid: FirebaseAuth.instance.currentUser?.uid,
                 );
               },
             ),
@@ -1317,6 +1318,7 @@ class _MessageBubble extends StatelessWidget {
   final Map<String, String> uidToName;
   final VoidCallback? onTapEdited;
   final VoidCallback? onLongPress;
+  final String? currentUid; // For @mention highlighting
 
   const _MessageBubble({
     required this.message,
@@ -1324,6 +1326,7 @@ class _MessageBubble extends StatelessWidget {
     this.uidToName = const {},
     this.onTapEdited,
     this.onLongPress,
+    this.currentUid,
   });
 
   Widget _buildReadReceipt() {
@@ -1429,6 +1432,10 @@ class _MessageBubble extends StatelessWidget {
     final isTask = message.type == 'task';
     final isMe = message.isMe;
     final isSystem = message.type == 'system';
+    // @mention highlight: check if current user is mentioned
+    final uid = currentUid ?? FirebaseAuth.instance.currentUser?.uid;
+    final isMentioned = uid != null && message.isMentioned(uid);
+    final hasMentions = message.mentionedUids.isNotEmpty && !message.isDeleted;
 
     if (isTask) {
       return _TaskBubble(message: message, formatTime: formatTime);
@@ -1514,11 +1521,24 @@ class _MessageBubble extends StatelessWidget {
                         ),
                       ),
                     ),
+                  // @mention badge for non-mentioned, non-me users
+                  if (hasMentions && !isMentioned && !isMe)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 2),
+                      child: Icon(Icons.alternate_email,
+                          size: 12, color: AppColors.textSecondary),
+                    ),
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isMe ? AppColors.primary : const Color(0xFFF0F0F0),
+                      color: isMentioned
+                          ? (isMe
+                              ? AppColors.primary.withValues(alpha: 0.85)
+                              : AppColors.pendingYellow.withValues(alpha: 0.25))
+                          : isMe
+                              ? AppColors.primary
+                              : const Color(0xFFF0F0F0),
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(16),
                         topRight: const Radius.circular(16),
