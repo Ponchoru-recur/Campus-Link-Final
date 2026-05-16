@@ -20,6 +20,8 @@ class Message {
   final List<EditEntry> editHistory; // Previous versions of this message
   final bool isDeleted; // true if message was soft-deleted
   final String? taskId; // links to tasks/{taskId} document for type=='task'
+  final List<String> mentionedUids; // UIDs of users mentioned via @mention in this message (D-04, D-12)
+  final DateTime? pinnedUntil; // If non-null, message is pinned until this timestamp (D-11)
 
   const Message({
     required this.id,
@@ -33,6 +35,8 @@ class Message {
     this.editHistory = const [],
     this.isDeleted = false,
     this.taskId,
+    this.mentionedUids = const [],
+    this.pinnedUntil,
   });
 
   bool get isEdited => editHistory.isNotEmpty;
