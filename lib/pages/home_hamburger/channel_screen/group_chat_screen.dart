@@ -42,6 +42,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   List<Map<String, dynamic>> _firestoreMembers = [];
   Map<String, String> _uidToName = {};
   StreamSubscription<QuerySnapshot>? _messagesSubscription;
+  StreamSubscription<QuerySnapshot>? _pinnedSubscription;
   StreamSubscription<DocumentSnapshot>? _groupDocSubscription;
   bool _isMarkingRead = false;
 
@@ -51,6 +52,30 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   // Messages loaded from Firestore stream
   final List<Message> _messages = [];
+
+  final List<Message> _pinnedMessages = [];
+
+  // Regex to match @DisplayName mentions in text
+  static final RegExp _mentionRegex = RegExp(r'@(\w+(?: \w+)*)');
+
+  /// Parses @DisplayName mentions from text and returns their UIDs.
+  List<String> _parseMentionedUids(String text) {
+    final matches = _mentionRegex.allMatches(text);
+    final uids = <String>[];
+    for (final match in matches) {
+      final displayName = match.group(1)!;
+      final uid = _uidToName.entries
+          .firstWhere(
+            (e) => e.value.toLowerCase() == displayName.toLowerCase(),
+            orElse: () => const MapEntry('', ''),
+          )
+          .key;
+      if (uid.isNotEmpty && !uids.contains(uid)) {
+        uids.add(uid);
+      }
+    }
+    return uids;
+  }
 
   void _sendMessage() async {
     final text = _controller.text.trim();
@@ -72,6 +97,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
     _controller.clear();
 
+    // Parse @mentions from text
+    final mentionedUids = _parseMentionedUids(text);
+
+    // Check for @everyone (faculty only)
+    final bool isEveryone = text.contains('@everyone') && _isFaculty;
+
     try {
       final firestore = FirebaseFirestore.instance;
       final messagesRef = firestore
@@ -79,14 +110,23 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           .doc(_chatId)
           .collection('messages');
 
-      await messagesRef.add({
+      final messageData = <String, dynamic>{
         'senderId': user.uid,
         'senderName': senderName,
         'text': text,
         'timestamp': FieldValue.serverTimestamp(),
         'type': 'text',
         'readBy': [user.uid],
-      });
+        'mentionedUids': mentionedUids,
+      };
+
+      if (isEveryone) {
+        messageData['pinnedUntil'] = Timestamp.fromDate(
+          DateTime.now().add(const Duration(hours: 24)),
+        );
+      }
+
+      await messagesRef.add(messageData);
 
       await firestore.collection('group_chats').doc(_chatId).update({
         'lastMessage': text,
@@ -161,6 +201,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _resetUnreadCount();
     _setupGroupStream();
     _setupMessagesStream();
+    _setupPinnedStream();
     _loadMembers();
   }
 
@@ -275,6 +316,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             editHistory: editHistory,
             isDeleted: data['isDeleted'] ?? false,
             taskId: data['taskId'],
+            mentionedUids: List<String>.from(data['mentionedUids'] ?? []),
+            pinnedUntil: (data['pinnedUntil'] as Timestamp?)?.toDate(),
           ));
         }
       });
@@ -285,6 +328,56 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       }
     }, onError: (e) {
       debugPrint('Error in messages stream: $e');
+    });
+  }
+
+  void _setupPinnedStream() {
+    _pinnedSubscription = FirebaseFirestore.instance
+        .collection('group_chats')
+        .doc(widget.chat.id)
+        .collection('messages')
+        .where('pinnedUntil', isGreaterThan: Timestamp.now())
+        .orderBy('pinnedUntil', descending: false)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _pinnedMessages.clear();
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          final pinnedUntil = (data['pinnedUntil'] as Timestamp?)?.toDate();
+          if (pinnedUntil == null || pinnedUntil.isBefore(DateTime.now())) continue;
+          final senderId = data['senderId'] ?? '';
+          final isMe = senderId == FirebaseAuth.instance.currentUser?.uid;
+          final editHistoryRaw = data['editHistory'] as List<dynamic>? ?? [];
+          final editHistory = editHistoryRaw.map((e) {
+            final map = e as Map<String, dynamic>;
+            return EditEntry(
+              text: map['text'] ?? '',
+              editedAt: _parseEditedAt(map['editedAt']),
+            );
+          }).toList();
+          _pinnedMessages.add(Message(
+            id: doc.id,
+            senderId: senderId,
+            senderName: (data['senderName'] as String?)?.isNotEmpty == true
+                ? data['senderName']
+                : 'Unknown',
+            text: data['text'] ?? '',
+            timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            isMe: isMe,
+            type: data['type'],
+            readBy: List<String>.from(data['readBy'] ?? []),
+            editHistory: editHistory,
+            isDeleted: data['isDeleted'] ?? false,
+            taskId: data['taskId'],
+            mentionedUids: List<String>.from(data['mentionedUids'] ?? []),
+            pinnedUntil: pinnedUntil,
+          ));
+        }
+      });
+    }, onError: (e) {
+      debugPrint('Error in pinned stream: $e');
     });
   }
 
@@ -1028,6 +1121,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   @override
   void dispose() {
     _messagesSubscription?.cancel();
+    _pinnedSubscription?.cancel();
     _groupDocSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
