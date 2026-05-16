@@ -19,16 +19,21 @@ import 'package:luminescence/services/notification_service.dart';
 /// this function in the compiled output.
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  // No UI updates possible in isolate — just log receipt
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {}
   debugPrint('Background message: ${message.messageId}');
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  await NotificationService.instance.initialize();
+  try {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    await NotificationService.instance.initialize();
+  } catch (e) {
+    debugPrint('FCM init skipped (emulator/unsupported device): $e');
+  }
   runApp(const MyApp());
 }
 

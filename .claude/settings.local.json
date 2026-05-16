@@ -61,7 +61,14 @@
       "Bash(sh -s -- --token sk_86bfdab93194482fb7b3c8b2)",
       "Bash(npx *)",
       "Bash(go version *)",
-      "Bash(xargs ls -lt)"
+      "Bash(xargs ls -lt)",
+      "Skill(context-mode:context-mode)",
+      "Bash(Get-ChildItem *)",
+      "PowerShell(Remove-Item *)",
+      "Bash(start *)",
+      "WebSearch",
+      "Bash(git commit *)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

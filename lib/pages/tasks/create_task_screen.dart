@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:luminescence/models/task.dart';
 import 'package:luminescence/services/task_service.dart';
 import 'package:luminescence/themes/app_colors.dart';
@@ -6,7 +8,18 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 
 class CreateTaskScreen extends StatefulWidget {
-  const CreateTaskScreen({super.key});
+  final String? prefilledChatId;
+  final String? prefilledChatType;
+  final String? prefilledRecipientName;
+  final String? prefilledOtherParticipantUid;
+
+  const CreateTaskScreen({
+    super.key,
+    this.prefilledChatId,
+    this.prefilledChatType,
+    this.prefilledRecipientName,
+    this.prefilledOtherParticipantUid,
+  });
 
   @override
   State<CreateTaskScreen> createState() => _CreateTaskScreenState();
@@ -21,6 +34,41 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   bool _isSubmitting = false;
 
   final _taskService = TaskService();
+  String _userRole = 'student';
+  String? _userId;
+  List<Map<String, dynamic>> _availableGroups = [];
+  final Set<String> _selectedGroupIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserAndGroups();
+  }
+
+  Future<void> _fetchUserAndGroups() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    _userId = user.uid;
+    try {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (userDoc.exists) {
+        _userRole = userDoc.data()?['role'] ?? 'student';
+      }
+      if (widget.prefilledChatId == null && _userRole == 'faculty') {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('group_chats')
+            .where('members', arrayContains: user.uid)
+            .get();
+        if (mounted) {
+          setState(() {
+            _availableGroups = snapshot.docs
+                .map((doc) => {'id': doc.id, 'name': doc['name'] as String})
+                .toList();
+          });
+        }
+      }
+    } catch (_) {}
+  }
 
   Future<void> _openLink(TaskLink link) async {
     final uri = Uri.tryParse(link.url);
@@ -168,21 +216,44 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       return;
     }
 
+    List<Map<String, String?>> targets = [];
+    if (widget.prefilledChatId != null) {
+      targets.add({
+        'chatId': widget.prefilledChatId,
+        'chatType': widget.prefilledChatType,
+        'otherParticipantUid': widget.prefilledOtherParticipantUid,
+      });
+    } else {
+      if (_selectedGroupIds.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select at least one group')),
+        );
+        return;
+      }
+      for (final gid in _selectedGroupIds) {
+        targets.add({'chatId': gid, 'chatType': 'group', 'otherParticipantUid': null});
+      }
+    }
+
     setState(() => _isSubmitting = true);
     try {
-      final deadlineStr = DateFormat('yyyy-MM-ddTHH:mm:ss').format(_deadline!);
-
-      await _taskService.createTask(
-        title: _titleController.text,
-        description: _descriptionController.text,
-        deadline: deadlineStr,
-        links: _links,
-      );
+      for (final target in targets) {
+        await _taskService.createTask(
+          title: _titleController.text,
+          description: _descriptionController.text,
+          deadline: '',
+          deadlineDate: _deadline,
+          links: _links,
+          chatId: target['chatId'],
+          chatType: target['chatType'],
+          otherParticipantUid: target['otherParticipantUid'],
+        );
+      }
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Task created successfully'),
+          content: Text('Task created in ${targets.length} group${targets.length > 1 ? 's' : ''}'),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -401,6 +472,63 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                         }).toList(),
                       ),
               ),
+              // Group selector (global mode) or target chat label (prefilled mode)
+              if (widget.prefilledChatId == null && _userRole == 'faculty') ...[
+                const SizedBox(height: 16),
+                _SectionCard(
+                  icon: Icons.group,
+                  title: 'Assign to Groups',
+                  child: _availableGroups.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text('No groups available',
+                              style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                        )
+                      : Column(
+                          children: _availableGroups.map((group) {
+                            final isSelected = _selectedGroupIds.contains(group['id']);
+                            return CheckboxListTile(
+                              title: Text(group['name'], style: const TextStyle(fontSize: 14)),
+                              value: isSelected,
+                              onChanged: (val) {
+                                setState(() {
+                                  if (val == true) {
+                                    _selectedGroupIds.add(group['id']);
+                                  } else {
+                                    _selectedGroupIds.remove(group['id']);
+                                  }
+                                });
+                              },
+                              activeColor: AppColors.primary,
+                              dense: true,
+                              controlAffinity: ListTileControlAffinity.leading,
+                            );
+                          }).toList(),
+                        ),
+                ),
+              ],
+              if (widget.prefilledChatId != null) ...[
+                const SizedBox(height: 16),
+                _SectionCard(
+                  icon: Icons.group,
+                  title: 'Target Chat',
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.chat, size: 16, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            widget.prefilledRecipientName ?? 'Chat',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 32),
 
               // Submit Button

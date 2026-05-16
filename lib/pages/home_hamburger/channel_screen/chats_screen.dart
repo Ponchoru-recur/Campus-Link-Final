@@ -7,11 +7,11 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/chat_item.dart'
 import 'package:luminescence/themes/app_colors.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_tile.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_screen.dart';
-import 'package:luminescence/pages/home_hamburger/channel_screen/announcement_button/announcement_dialog.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/create_group_chat_button.dart';
 import 'package:luminescence/pages/home_hamburger/settings_screen/settings_screen.dart';
 import 'package:luminescence/pages/home_hamburger/updates_tasks_screen.dart';
 import 'package:luminescence/pages/tasks/task_list_screen.dart';
+import 'package:luminescence/pages/tasks/create_task_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_item.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_tile.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/individual_chat_screen.dart';
@@ -761,14 +761,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     );
                   },
                 ),
-                _DrawerItem(
-                  icon: Icons.campaign_outlined,
-                  label: 'Announcements',
-                  onTap: () {
-                    Navigator.pop(context);
-                    // TODO: navigate to Announcements
-                  },
-                ),
                 const Divider(height: 1),
                 _DrawerItem(
                   icon: Icons.settings_outlined,
@@ -880,14 +872,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 });
               },
             ),
-          if (!_isSearching)
+          if (_userRole == 'faculty' && !_isSearching)
             IconButton(
-              icon: const Icon(Icons.send_outlined),
-              tooltip: 'Create Announcement',
+              icon: const Icon(Icons.add_task),
+              tooltip: 'Create Task',
               onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (_) => AnnouncementDialog(groupChats: _groupChats),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CreateTaskScreen(),
+                  ),
                 );
               },
             ),

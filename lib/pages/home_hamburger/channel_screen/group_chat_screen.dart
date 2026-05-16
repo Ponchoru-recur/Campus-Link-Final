@@ -128,6 +128,23 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           'pinnedUntil': Timestamp.fromDate(pinnedUntil), // NEW per D-11
       });
 
+      // Audit log: record @everyone usage if faculty
+      if (hasEveryone && _isFaculty) {
+        final everyoneCallsRef = firestore
+            .collection('group_chats').doc(_chatId)
+            .collection('everyone_calls');
+        everyoneCallsRef.add({
+          'senderId': user.uid,
+          'senderName': senderName,
+          'messageId': docRef.id,
+          'text': text,
+          'timestamp': FieldValue.serverTimestamp(),
+          'expireAt': Timestamp.fromMillisecondsSinceEpoch(
+            DateTime.now().add(const Duration(hours: 24)).millisecondsSinceEpoch,
+          ),
+        });
+      }
+
       // Fire-and-forget notification dispatch to Worker
       NotificationService.instance.sendTieredNotification(
         chatId: _chatId,
@@ -1328,6 +1345,132 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  void _showEveryoneAudit() {
+    final db = FirebaseFirestore.instance;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        final auditRef = db
+            .collection('group_chats').doc(_chatId)
+            .collection('everyone_calls')
+            .orderBy('timestamp', descending: true)
+            .limit(50);
+        return DraggableScrollableSheet(
+          initialChildSize: 0.5,
+          minChildSize: 0.3,
+          maxChildSize: 0.85,
+          expand: false,
+          builder: (context, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.history, size: 20, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      const Text(
+                        '@everyone History',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: auditRef.snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Center(child: Text('Error: ${snapshot.error}'));
+                        }
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        final docs = snapshot.data!.docs;
+                        if (docs.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              'No @everyone calls in the last 24 hours',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          );
+                        }
+                        return ListView.separated(
+                          controller: scrollController,
+                          itemCount: docs.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final data = docs[index].data() as Map<String, dynamic>;
+                            final senderName = data['senderName'] ?? 'Unknown';
+                            final messageText = data['text'] ?? '';
+                            final messageId = data['messageId'] ?? '';
+                            final ts = data['timestamp'] as Timestamp?;
+                            final timeStr = ts != null
+                                ? _formatTime(ts.toDate())
+                                : '';
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                                child: Text(
+                                  senderName.isNotEmpty ? senderName[0] : '?',
+                                  style: const TextStyle(
+                                    color: AppColors.primaryDark,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                senderName,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text(
+                                messageText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: Text(
+                                timeStr,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              onTap: () {
+                                Navigator.pop(context);
+                                final idx = _messages.indexWhere(
+                                  (m) => m.id == messageId,
+                                );
+                                if (idx >= 0) _scrollToMessage(idx);
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _scrollToMessage(int index) {
     if (index < 0 || index >= _messages.length) return;
     final position = index * 60.0;
@@ -1392,7 +1535,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               },
               onUnpin: _unpinMessage,
               formatTime: _formatTime,
-            ),
+              onShowHistory: _showEveryoneAudit,
+            )
+          else if (_isFaculty)
+            _EveryoneHistoryButton(onShowHistory: _showEveryoneAudit),
           // ── Messages List ──
           Expanded(
             child: ListView.builder(
@@ -1751,6 +1897,7 @@ class _PinnedBar extends StatelessWidget {
   final VoidCallback onToggle;
   final Future<void> Function(String) onUnpin;
   final String Function(DateTime) formatTime;
+  final VoidCallback onShowHistory;
 
   const _PinnedBar({
     required this.pinnedMessages,
@@ -1758,6 +1905,7 @@ class _PinnedBar extends StatelessWidget {
     required this.onToggle,
     required this.onUnpin,
     required this.formatTime,
+    required this.onShowHistory,
   });
 
   String _formatAge(DateTime timestamp) {
@@ -1841,12 +1989,59 @@ class _PinnedBar extends StatelessWidget {
                 ),
               ),
               IconButton(
+                icon: const Icon(Icons.history, size: 18, color: AppColors.primary),
+                tooltip: '@everyone history',
+                onPressed: onShowHistory,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                splashRadius: 16,
+              ),
+              IconButton(
                 icon: Icon(Icons.close, size: 16, color: Colors.grey[600]),
                 onPressed: () => onUnpin(mostRecent.id),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 splashRadius: 16,
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// @everyone History Button (when no pinned message)
+// ─────────────────────────────────────────────
+class _EveryoneHistoryButton extends StatelessWidget {
+  final VoidCallback onShowHistory;
+  const _EveryoneHistoryButton({required this.onShowHistory});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      child: InkWell(
+        onTap: onShowHistory,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              const Icon(Icons.history, size: 16, color: AppColors.primary),
+              const SizedBox(width: 8),
+              const Text(
+                '@everyone history',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.primary,
+                ),
+              ),
+              const Spacer(),
+              Icon(Icons.chevron_right, size: 16, color: Colors.grey[400]),
             ],
           ),
         ),

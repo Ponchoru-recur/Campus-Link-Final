@@ -75,24 +75,45 @@ class NotificationService {
     );
 
     // 4. Get initial FCM token and store it
-    final token = await _firebaseMessaging.getToken();
-    if (token != null) {
-      await _saveToken(token);
+    try {
+      final token = await _firebaseMessaging.getToken();
+      if (token != null) {
+        debugPrint('FCM token obtained: ${token.substring(0, 40)}...');
+        await _saveToken(token);
+      }
+    } catch (e) {
+      debugPrint('FCM token init skipped (emulator/unsupported device): $e');
     }
 
     // 5. Listen for token refresh
-    _firebaseMessaging.onTokenRefresh.listen(_saveToken);
+    try {
+      _firebaseMessaging.onTokenRefresh.listen(_saveToken);
+    } catch (e) {
+      debugPrint('FCM token refresh listener skipped: $e');
+    }
 
     // 6. Handle foreground messages (show local notification)
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    try {
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    } catch (e) {
+      debugPrint('FCM onMessage listener skipped: $e');
+    }
 
     // 7. Handle notification tap (app opened from background via notification)
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+    try {
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+    } catch (e) {
+      debugPrint('FCM onMessageOpenedApp listener skipped: $e');
+    }
 
     // 8. Check if app was opened from a terminated notification (cold start)
-    final initialMessage = await _firebaseMessaging.getInitialMessage();
-    if (initialMessage != null) {
-      _handleNotificationTap(initialMessage);
+    try {
+      final initialMessage = await _firebaseMessaging.getInitialMessage();
+      if (initialMessage != null) {
+        _handleNotificationTap(initialMessage);
+      }
+    } catch (e) {
+      debugPrint('FCM getInitialMessage skipped: $e');
     }
   }
 
@@ -107,9 +128,10 @@ class NotificationService {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .update({
+          .set({
         'fcmTokens': FieldValue.arrayUnion([token]),
-      });
+      }, SetOptions(merge: true));
+      debugPrint('FCM token saved: $token');
     } catch (e) {
       debugPrint('Error saving FCM token: $e');
     }
@@ -204,6 +226,8 @@ class NotificationService {
       );
       if (response.statusCode != 200) {
         debugPrint('Notification Worker returned ${response.statusCode}: ${response.body}');
+      } else {
+        debugPrint('Notification Worker success: ${response.body}');
       }
     } catch (e) {
       debugPrint('Failed to send notification to Worker: $e');

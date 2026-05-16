@@ -11,7 +11,7 @@ void main() {
       }
       expect(pinnedUntil, isNotNull);
       // Should be roughly 24h in the future
-      final diff = pinnedUntil!.difference(DateTime.now());
+      final diff = pinnedUntil.difference(DateTime.now());
       expect(diff.inHours, greaterThanOrEqualTo(23));
       expect(diff.inHours, lessThanOrEqualTo(25));
     });

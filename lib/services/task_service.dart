@@ -25,6 +25,10 @@ class TaskService {
     String? greenThresholdDays,
     String? yellowThresholdDays,
     String? redThresholdDays,
+    DateTime? deadlineDate,
+    String? chatId,
+    String? chatType,
+    String? otherParticipantUid,
   }) async {
     final user = _user;
 
@@ -33,11 +37,40 @@ class TaskService {
 
     final linkData = links.map((link) => link.toMap()).toList();
 
+    final email = user.email ?? '';
+    final creatorName = email.isEmpty
+        ? 'Unknown'
+        : email
+            .split('@')
+            .first
+            .replaceAll('.', ' ')
+            .split(' ')
+            .map((p) => p.isEmpty ? p : p[0].toUpperCase() + p.substring(1))
+            .join(' ');
+
+    List<String>? targetUids;
+    if (chatId != null && chatType != null) {
+      if (chatType == 'group') {
+        final chatDoc = await _firestore.collection('group_chats').doc(chatId).get();
+        if (chatDoc.exists) {
+          targetUids = List<String>.from(chatDoc.data()?['members'] ?? []);
+        }
+      } else if (chatType == 'dm') {
+        targetUids = [user.uid];
+        if (otherParticipantUid != null) {
+          targetUids.add(otherParticipantUid);
+        }
+      }
+    }
+
+    final deadlineField = deadlineDate ?? deadline;
+
     final taskData = {
       'title': title,
       'description': description,
-      'deadline': deadline,
+      'deadline': deadlineField,
       'createdBy': user.uid,
+      'creatorName': creatorName,
       'createdAt': FieldValue.serverTimestamp(),
       'links': linkData,
       'isActive': true,
@@ -45,9 +78,73 @@ class TaskService {
       if (greenThresholdDays != null) 'greenThresholdDays': int.tryParse(greenThresholdDays),
       if (yellowThresholdDays != null) 'yellowThresholdDays': int.tryParse(yellowThresholdDays),
       if (redThresholdDays != null) 'redThresholdDays': int.tryParse(redThresholdDays),
+      'chatId': ?chatId,
+      'chatType': ?chatType,
+      'targetUids': ?targetUids,
     };
 
     await taskRef.set(taskData);
+
+    if (chatId != null && chatType != null) {
+      final messagesRef = chatType == 'group'
+          ? _firestore.collection('group_chats').doc(chatId).collection('messages')
+          : _firestore.collection('direct_messages').doc(chatId).collection('messages');
+
+      final chatRef = chatType == 'group'
+          ? _firestore.collection('group_chats').doc(chatId)
+          : _firestore.collection('direct_messages').doc(chatId);
+
+      await messagesRef.add({
+        'senderId': user.uid,
+        'senderName': creatorName,
+        'text': '\u{1F4CB} $title\n\n$description',
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'task',
+        'taskId': taskId,
+        'readBy': [user.uid],
+      });
+
+      final deadlineStr = deadlineDate != null
+          ? ' (Due: ${deadlineDate.month}/${deadlineDate.day}/${deadlineDate.year})'
+          : deadline.isNotEmpty
+              ? ' (Due: $deadline)'
+              : '';
+
+      final truncatedTitle = title.length > 50 ? '${title.substring(0, 50)}...' : title;
+      await chatRef.update({
+        'lastMessage': '\u{1F4CB} Task: $truncatedTitle$deadlineStr',
+        'time': 'Now',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+      });
+
+      if (chatType == 'group' && targetUids != null) {
+        final chatDoc = await chatRef.get();
+        if (chatDoc.exists) {
+          final data = chatDoc.data()!;
+          final members = List<String>.from(data['members'] ?? []);
+          final unreadCount = data['unreadCount'];
+          final Map<String, dynamic> updateMap = {};
+          if (unreadCount is Map) {
+            for (final uid in members) {
+              if (uid == user.uid) continue;
+              final currentCount = (unreadCount[uid] ?? 0) as int;
+              updateMap['unreadCount.$uid'] = currentCount + 1;
+            }
+          } else {
+            for (final uid in members) {
+              updateMap['unreadCount.$uid'] = uid == user.uid ? 0 : 1;
+            }
+          }
+          if (updateMap.isNotEmpty) {
+            await chatRef.update(updateMap);
+          }
+        }
+      } else if (chatType == 'dm') {
+        await chatRef.update({
+          'unreadCount.${chatId.split('_').firstWhere((e) => e != user.uid)}': FieldValue.increment(1),
+        });
+      }
+    }
 
     return {...taskData, 'id': taskId};
   }

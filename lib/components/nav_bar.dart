@@ -86,16 +86,6 @@ class _NavBarState extends State<NavBar> {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(left: 15.0),
-            child: ListTile(
-              leading: Icon(Icons.announcement),
-              title: Text("Announcements"),
-              onTap: () {
-                Navigator.pushNamed(context, '/announcement');
-              },
-            ),
-          ),
           Divider(),
           Padding(
             padding: const EdgeInsets.only(left: 15.0),
