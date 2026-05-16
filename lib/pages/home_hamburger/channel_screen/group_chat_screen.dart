@@ -11,6 +11,7 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/message_actions
 import 'package:luminescence/pages/home_hamburger/channel_screen/message_edit_delete.dart';
 import 'package:luminescence/pages/tasks/create_task_screen.dart';
 import 'package:luminescence/widgets/task_bubble.dart';
+import 'package:luminescence/services/notification_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 final _urlRegex = RegExp(
@@ -115,7 +116,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         }
       }
 
-      await messagesRef.add({
+      final docRef = await messagesRef.add({
         'senderId': user.uid,
         'senderName': senderName,
         'text': text,
@@ -126,6 +127,19 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         if (pinnedUntil != null)
           'pinnedUntil': Timestamp.fromDate(pinnedUntil), // NEW per D-11
       });
+
+      // Fire-and-forget notification dispatch to Worker
+      NotificationService.instance.sendTieredNotification(
+        chatId: _chatId,
+        messageId: docRef.id,
+        senderId: user.uid,
+        senderName: senderName,
+        chatName: widget.chat.name,
+        text: text,
+        mentionedUids: mentionedUids,
+        isEveryone: hasEveryone && _isFaculty,
+        isTask: false,
+      );
 
       await firestore.collection('group_chats').doc(_chatId).update({
         'lastMessage': text,
@@ -537,6 +551,48 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 'Group Chat',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
+              const SizedBox(height: 16),
+              // Notifications section
+              const Text(
+                'Notifications',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              ...['normal', 'mentionsOnly', 'muted'].map((strategy) {
+                final labels = {
+                  'normal': 'All notifications',
+                  'mentionsOnly': 'Mentions only',
+                  'muted': 'Muted',
+                };
+                return RadioListTile<String>(
+                  title: Text(
+                    labels[strategy] ?? strategy,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  subtitle: Text(
+                    strategy == 'normal'
+                        ? 'Full notifications for all messages'
+                        : strategy == 'mentionsOnly'
+                            ? 'Only @mentions and @everyone'
+                            : 'No notifications from this group',
+                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                  value: strategy,
+                  groupValue: _notificationStrategy,
+                  onChanged: (value) {
+                    if (value != null) {
+                      setSheetState(() {
+                        _notificationStrategy = value;
+                      });
+                      _updateNotificationStrategy(value);
+                    }
+                  },
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: AppColors.primary,
+                );
+              }),
+              const Divider(height: 1),
               const SizedBox(height: 16),
               // Search bar
               TextField(
@@ -1509,6 +1565,8 @@ class _MessageBubble extends StatelessWidget {
     final isTask = message.type == 'task';
     final isMe = message.isMe;
     final isSystem = message.type == 'system';
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final isMentioned = message.mentionedUids.contains(currentUid);
 
     if (isTask) {
       return TaskBubble(message: message, formatTime: formatTime);
@@ -1585,20 +1643,51 @@ class _MessageBubble extends StatelessWidget {
                   if (!isMe)
                     Padding(
                       padding: const EdgeInsets.only(left: 4, bottom: 2),
-                      child: Text(
-                        message.senderName,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            message.senderName,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (!isMentioned && message.mentionedUids.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.alternate_email, size: 10, color: Colors.amber),
+                                    SizedBox(width: 2),
+                                    Text(
+                                      'mentions',
+                                      style: TextStyle(fontSize: 9, color: Colors.amber, fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isMe ? AppColors.primary : const Color(0xFFF0F0F0),
+                      color: isMe
+                          ? AppColors.primary
+                          : isMentioned
+                              ? const Color(0xFFFFF3E0)
+                              : const Color(0xFFF0F0F0),
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(16),
                         topRight: const Radius.circular(16),

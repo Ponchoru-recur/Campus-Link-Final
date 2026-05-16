@@ -5,21 +5,21 @@ milestone_name: milestone
 status: unknown
 last_updated: "2026-05-06T13:38:02.948Z"
 progress:
-  total_phases: 4
-  completed_phases: 0
-  total_plans: 8
-  completed_plans: 4
-  percent: 50
+  total_phases: 7
+  completed_phases: 1
+  total_plans: 5
+  completed_plans: 5
+  percent: 100
 ---
 
 # State — Campus Link (Luminescence)
 
 ## Current Phase
 
-**Phase**: 4
-**Plan**: 2
-**Status**: ready
-**Updated**: 2026-05-05
+**Phase**: 7
+**Plan**: 0
+**Status**: complete
+**Updated**: 2026-05-17
 
 ## All Phases
 
@@ -30,6 +30,8 @@ progress:
 | 3 | Auto-Wire Contacts | pending | IDM-03, IDM-04, IDM-14 |
 | 4 | Contact Search & Add | pending | IDM-06, IDM-07 |
 | 5 | Visual Distinction | pending | IDM-08, IDM-09, IDM-10 |
+| 6 | Create Tasks Features | pending | TBD |
+| 7 | @Mentions & Pinned Messages | complete | D-01..D-27 |
 
 ## Milestones
 
@@ -42,3 +44,4 @@ None completed yet.
 - 2026-05-04: Phase 1 context gathered — decisions: `direct_messages` collection, `members[]` field, Map `unreadCount`, create Dart models
 - 2026-05-04: Project initialized, roadmap created (5 phases, 15 v1 requirements mapped)
 - 2026-05-14: Phase 6 added: Adding new features related to Create Tasks
+- 2026-05-16: Phase 7 context gathered — @mentions & pinned messages + FCM push notification tiered model

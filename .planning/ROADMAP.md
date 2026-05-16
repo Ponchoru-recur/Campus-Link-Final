@@ -10,8 +10,9 @@
 | 4 | Contact Search & Add | Search bar to find and add student/instructor peers as DM contacts | IDM-06, IDM-07 | 2 |
 | 5 | Visual Distinction | Distinguish instructor DMs from student DMs in chat list | IDM-08, IDM-09, IDM-10 | 2 |
 | 6 | Create Tasks Features | Adding new features related to Create Tasks | TBD | TBD |
+| 7 | @Mentions & Pinned Messages | @user and @everyone mentions in group chats with auto-pin for @everyone | D-01..D-27 | 10 | ✓ |
 
-Total: **6 phases** | **15 v1 requirements mapped** | All v1 requirements covered
+Total: **7 phases** | **15 v1 requirements mapped** | All v1 requirements covered
 
 ---
 
@@ -125,6 +126,35 @@ Total: **6 phases** | **15 v1 requirements mapped** | All v1 requirements covere
 
 **Success criteria**:
 TBD
+
+---
+
+### Phase7: @Mentions & Pinned Messages
+
+**Goal**: Add @user and @everyone mention system in group chats with pinned message bar for @everyone. Full FCM push notification integration with tiered delivery.
+
+**Requirements**: D-01 through D-27
+
+**Plans:** 5 plans
+
+**Plan list**:
+- [x] 07-01-PLAN.md — Schema, Message model, send logic, notification strategy initialization
+- [x] 07-02-PLAN.md — FCM infrastructure (dependencies, notification_service, main.dart, Android manifest)
+- [x] 07-03-PLAN.md — Test stubs (TDD: autocomplete, highlight, @everyone pin, notification strategy)
+- [x] 07-04-PLAN.md — @mention autocomplete UI, pinned bar widget, bubble highlight/@badge, notification toggle
+- [x] 07-05-PLAN.md — Cloudflare Worker client-side tiered FCM dispatch
+
+**Success criteria**:
+1. @user mentions trigger autocomplete dropdown filtered by group members; selecting inserts @DisplayName
+2. Mentioned users see amber-highlighted message bubbles; others see @mentions badge
+3. Faculty-only @everyone auto-pins message to collapsible top bar for 24h with visual fading
+4. Users can manually unpin from bar; message remains in stream
+5. Per-user notification strategy (normal/mentionsOnly/muted) stored per group, defaulted by role
+6. Notification strategy toggle in group info panel
+7. FCM tokens registered on login and stored in Firestore
+8. Foreground/background/terminated message handling with local notification display
+9. Client-side tiered FCM dispatch via Cloudflare Worker respecting notification strategies
+10. Notification tap navigates to correct group chat
 
 ---
 
