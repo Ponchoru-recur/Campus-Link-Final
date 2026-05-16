@@ -54,6 +54,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   final List<Message> _messages = [];
 
   final List<Message> _pinnedMessages = [];
+  bool _pinnedBarCollapsed = false;
 
   // Regex to match @DisplayName mentions in text
   static final RegExp _mentionRegex = RegExp(r'@(\w+(?: \w+)*)');
@@ -1208,6 +1209,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  Future<void> _unpinMessage(Message msg) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('group_chats')
+          .doc(widget.chat.id)
+          .collection('messages')
+          .doc(msg.id)
+          .update({
+        'pinnedUntil': FieldValue.delete(),
+      });
+    } catch (e) {
+      debugPrint('Error unpinning message: $e');
+    }
+  }
+
   void _scrollToMessage(int index) {
     if (index < 0 || index >= _messages.length) return;
     final position = index * 60.0;
@@ -1260,8 +1276,20 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
       body: Column(
         children: [
+          // ── Pinned Bar ──
+          if (_pinnedMessages.isNotEmpty)
+            _PinnedBar(
+              pinnedMessages: _pinnedMessages,
+              collapsed: _pinnedBarCollapsed,
+              formatTime: _formatTime,
+              onToggleCollapse: () {
+                setState(() {
+                  _pinnedBarCollapsed = !_pinnedBarCollapsed;
+                });
+              },
+              onDismiss: (Message msg) => _unpinMessage(msg),
+            ),
           // ── Messages List ──
-          Expanded(
             child: ListView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1861,6 +1889,184 @@ class _TaskBubbleState extends State<_TaskBubble> {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────
+// Pinned Messages Bar
+// ─────────────────────────────────────
+class _PinnedBar extends StatelessWidget {
+  final List<Message> pinnedMessages;
+  final bool collapsed;
+  final String Function(DateTime) formatTime;
+  final VoidCallback onToggleCollapse;
+  final void Function(Message) onDismiss;
+
+  const _PinnedBar({
+    required this.pinnedMessages,
+    required this.collapsed,
+    required this.formatTime,
+    required this.onToggleCollapse,
+    required this.onDismiss,
+  });
+
+  /// Returns a human-readable age label for the pinned message.
+  static String _ageLabel(DateTime timestamp) {
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else {
+      return 'yesterday';
+    }
+  }
+
+  /// Returns an opacity value based on how long ago the message was pinned.
+  /// <1h = highlighted (full opacity), <24h = normal, >24h = dimmed.
+  static double _ageOpacity(DateTime pinnedUntil) {
+    final remaining = pinnedUntil.difference(DateTime.now());
+    final totalHours = 24.0;
+    final hoursLeft = remaining.inMinutes / 60.0;
+    final fraction = (hoursLeft / totalHours).clamp(0.0, 1.0);
+    if (fraction > 0.95) return 1.0; // <1h old
+    if (fraction > 0.1) return 0.75; // <~22h old
+    return 0.4; // expiring soon
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mostRecent = pinnedMessages.last;
+    final opacity = _ageOpacity(mostRecent.pinnedUntil ?? DateTime.now());
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: AppColors.pendingYellow.withValues(alpha: 0.1),
+        border: Border(
+          bottom: BorderSide(color: AppColors.pendingYellow.withValues(alpha: 0.3)),
+        ),
+      ),
+      child: GestureDetector(
+        onTap: onToggleCollapse,
+        child: Opacity(
+          opacity: opacity,
+          child: collapsed
+              ? _buildCollapsedBar(mostRecent)
+              : _buildExpandedBar(mostRecent),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCollapsedBar(Message msg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          Icon(Icons.push_pin, size: 14, color: AppColors.pendingYellow),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              '${msg.senderName}: ${msg.text}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ),
+          Text(
+            _ageLabel(msg.timestamp),
+            style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpandedBar(Message msg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.push_pin, size: 16, color: AppColors.pendingYellow),
+              const SizedBox(width: 6),
+              Text(
+                'Pinned Message',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.pendingYellow.withValues(alpha: 0.9),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _ageLabel(msg.timestamp),
+                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+              ),
+              const SizedBox(width: 4),
+              InkWell(
+                onTap: onToggleCollapse,
+                child: Icon(Icons.expand_less, size: 18, color: Colors.grey[500]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 12,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                child: Text(
+                  msg.senderName.isNotEmpty ? msg.senderName[0] : '?',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      msg.senderName,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      msg.text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              InkWell(
+                onTap: () => onDismiss(msg),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(Icons.close, size: 16, color: Colors.grey[500]),
+                ),
+              ),
+            ],
           ),
         ],
       ),
