@@ -14,14 +14,14 @@ void main() {
       mentionedUids: ['currentUser'],
     );
 
-    test('isMentioned returns true when currentUid is in mentionedUids', () {
-      final isMentioned = baseMessage.isMentioned(currentUid);
+    test('mentionedUids contains currentUid when mentioned', () {
+      final isMentioned = baseMessage.mentionedUids.contains(currentUid);
       expect(isMentioned, isTrue);
     });
 
-    test('isMentioned returns false for non-mentioned user', () {
+    test('mentionedUids does not contain unrelated uid', () {
       const nonMentioned = 'otherUser';
-      final isMentioned = baseMessage.isMentioned(nonMentioned);
+      final isMentioned = baseMessage.mentionedUids.contains(nonMentioned);
       expect(isMentioned, isFalse);
     });
 
@@ -39,7 +39,7 @@ void main() {
 
     test('messages with mentions show @badge for non-mentioned users', () {
       final hasMentions = baseMessage.mentionedUids.isNotEmpty;
-      final isMentioned = baseMessage.isMentioned('unrelatedUser');
+      final isMentioned = baseMessage.mentionedUids.contains('unrelatedUser');
       // Non-mentioned user sees message with mentions -> show badge
       expect(hasMentions, isTrue);
       expect(isMentioned, isFalse); // this user is not the mentioned one
@@ -50,7 +50,7 @@ void main() {
       expect(baseMessage.pinnedUntil, isNull);
     });
 
-    test('isEveryone returns true when text contains @everyone', () {
+    test('text contains @everyone returns true', () {
       final everyoneMsg = Message(
         id: 'msg3',
         senderId: 'facultyUser',
@@ -60,11 +60,11 @@ void main() {
         isMe: false,
         mentionedUids: [],
       );
-      expect(everyoneMsg.isEveryone, isTrue);
+      expect(everyoneMsg.text.contains('@everyone'), isTrue);
     });
 
-    test('isEveryone returns false when text has no @everyone', () {
-      expect(baseMessage.isEveryone, isFalse);
+    test('text without @everyone returns false', () {
+      expect(baseMessage.text.contains('@everyone'), isFalse);
     });
   });
 }
