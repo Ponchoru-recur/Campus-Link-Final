@@ -46,6 +46,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   bool _isMarkingRead = false;
   final LayerLink _mentionLayerLink = LayerLink();
 
+  // Pinned messages
+  StreamSubscription<QuerySnapshot>? _pinnedSubscription;
+  List<Message> _pinnedMessages = [];
+  bool _pinnedBarExpanded = true;
+
+  // Notification strategy
+  String _notificationStrategy = 'mentionsOnly';
+
   // Search
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -195,6 +203,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _setupGroupStream();
     _setupMessagesStream();
     _loadMembers();
+    _setupPinnedStream();
+    _loadNotificationStrategy();
   }
 
   Future<void> _checkAdminStatus() async {
@@ -391,6 +401,50 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       await batch.commit();
     } catch (e) {
       debugPrint('Error ensuring notification strategies: $e');
+    }
+  }
+
+  void _setupPinnedStream() {
+    _pinnedSubscription = FirebaseFirestore.instance
+        .collection('group_chats')
+        .doc(widget.chat.id)
+        .collection('messages')
+        .where('pinnedUntil', isGreaterThan: Timestamp.now())
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _pinnedMessages = snapshot.docs.map((doc) {
+          final data = doc.data();
+          final senderId = data['senderId'] ?? '';
+          final isMe = senderId == FirebaseAuth.instance.currentUser?.uid;
+          return Message(
+            id: doc.id,
+            senderId: senderId,
+            senderName: data['senderName'] ?? 'Unknown',
+            text: data['text'] ?? '',
+            timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            isMe: isMe,
+            mentionedUids: List<String>.from(data['mentionedUids'] ?? []),
+            pinnedUntil: (data['pinnedUntil'] as Timestamp?)?.toDate(),
+          );
+        }).toList();
+      });
+    }, onError: (e) {
+      debugPrint('Error in pinned stream: $e');
+    });
+  }
+
+  Future<void> _unpinMessage(String messageId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('group_chats')
+          .doc(widget.chat.id)
+          .collection('messages')
+          .doc(messageId)
+          .update({'pinnedUntil': null});
+    } catch (e) {
+      debugPrint('Error unpinning message: $e');
     }
   }
 
@@ -959,6 +1013,44 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  Future<void> _loadNotificationStrategy() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('group_chats')
+          .doc(_chatId)
+          .collection('members')
+          .doc(user.uid)
+          .get();
+      if (doc.exists && doc.data()?['notificationStrategy'] != null) {
+        setState(() {
+          _notificationStrategy = doc.data()!['notificationStrategy'] as String;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading notification strategy: $e');
+    }
+  }
+
+  Future<void> _updateNotificationStrategy(String strategy) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('group_chats')
+          .doc(_chatId)
+          .collection('members')
+          .doc(user.uid)
+          .set({'notificationStrategy': strategy}, SetOptions(merge: true));
+      setState(() {
+        _notificationStrategy = strategy;
+      });
+    } catch (e) {
+      debugPrint('Error updating notification strategy: $e');
+    }
+  }
+
   Future<void> _handleMessageAction(Message msg, String action) async {
     if (!msg.isMe) return;
     switch (action) {
@@ -1094,6 +1186,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   void dispose() {
     _messagesSubscription?.cancel();
     _groupDocSubscription?.cancel();
+    _pinnedSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _searchController.dispose();
@@ -1231,6 +1324,19 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
       body: Column(
         children: [
+          // ── Pinned Bar ──
+          if (_pinnedMessages.isNotEmpty)
+            _PinnedBar(
+              pinnedMessages: _pinnedMessages,
+              isExpanded: _pinnedBarExpanded,
+              onToggle: () {
+                setState(() {
+                  _pinnedBarExpanded = !_pinnedBarExpanded;
+                });
+              },
+              onUnpin: _unpinMessage,
+              formatTime: _formatTime,
+            ),
           // ── Messages List ──
           Expanded(
             child: ListView.builder(
@@ -1541,6 +1647,119 @@ class _MessageBubble extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Pinned Bar
+// ─────────────────────────────────────────────
+class _PinnedBar extends StatelessWidget {
+  final List<Message> pinnedMessages;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+  final Future<void> Function(String) onUnpin;
+  final String Function(DateTime) formatTime;
+
+  const _PinnedBar({
+    required this.pinnedMessages,
+    required this.isExpanded,
+    required this.onToggle,
+    required this.onUnpin,
+    required this.formatTime,
+  });
+
+  String _formatAge(DateTime timestamp) {
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else {
+      return 'yesterday';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (pinnedMessages.isEmpty) return const SizedBox.shrink();
+
+    final mostRecent = pinnedMessages.last; // last = most recent in ascending order
+    final age = DateTime.now().difference(mostRecent.timestamp);
+    Color bgColor;
+    if (age.inHours < 1) {
+      bgColor = Colors.amber.withValues(alpha: 0.2);
+    } else if (age.inHours < 24) {
+      bgColor = Colors.amber.withValues(alpha: 0.1);
+    } else {
+      bgColor = Colors.grey[100]!;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        border: const Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      child: InkWell(
+        onTap: onToggle,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Icon(
+                Icons.push_pin,
+                size: 16,
+                color: age.inHours < 1 ? Colors.amber[700] : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          mostRecent.senderName,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _formatAge(mostRecent.timestamp),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      mostRecent.text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: age.inHours < 1 ? AppColors.textPrimary : AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close, size: 16, color: Colors.grey[600]),
+                onPressed: () => onUnpin(mostRecent.id),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                splashRadius: 16,
+              ),
+            ],
+          ),
         ),
       ),
     );
