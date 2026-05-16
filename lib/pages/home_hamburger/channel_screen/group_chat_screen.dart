@@ -44,6 +44,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   StreamSubscription<QuerySnapshot>? _messagesSubscription;
   StreamSubscription<DocumentSnapshot>? _groupDocSubscription;
   bool _isMarkingRead = false;
+  final LayerLink _mentionLayerLink = LayerLink();
 
   // Search
   final TextEditingController _searchController = TextEditingController();
@@ -1271,6 +1272,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             onSend: _sendMessage,
             isFaculty: _isFaculty,
             onTaskCreate: _showTaskCreation,
+            uidToName: _uidToName,
+            layerLink: _mentionLayerLink,
+            currentUserUid: FirebaseAuth.instance.currentUser?.uid ?? '',
           ),
         ],
       ),
@@ -1546,18 +1550,138 @@ class _MessageBubble extends StatelessWidget {
 // ─────────────────────────────────────────────
 // Message Input Bar
 // ─────────────────────────────────────────────
-class _MessageInputBar extends StatelessWidget {
+class _MessageInputBar extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final bool isFaculty;
   final VoidCallback? onTaskCreate;
+  final Map<String, String> uidToName;
+  final LayerLink layerLink;
+  final String currentUserUid;
 
   const _MessageInputBar({
     required this.controller,
     required this.onSend,
     this.isFaculty = false,
     this.onTaskCreate,
+    required this.uidToName,
+    required this.layerLink,
+    required this.currentUserUid,
   });
+
+  @override
+  State<_MessageInputBar> createState() => _MessageInputBarState();
+}
+
+class _MessageInputBarState extends State<_MessageInputBar> {
+  OverlayEntry? _mentionOverlay;
+
+  void _onTextChanged() {
+    final text = widget.controller.text;
+    final cursorPos = widget.controller.selection.baseOffset;
+    if (cursorPos < 0 || cursorPos > text.length) {
+      _removeMentionOverlay();
+      return;
+    }
+
+    // Find the last @ before cursor
+    final textBeforeCursor = text.substring(0, cursorPos);
+    final atIndex = textBeforeCursor.lastIndexOf('@');
+    if (atIndex == -1 || (atIndex > 0 && textBeforeCursor[atIndex - 1] != ' ' && atIndex != 0)) {
+      _removeMentionOverlay();
+      return;
+    }
+
+    final query = textBeforeCursor.substring(atIndex + 1);
+    final filtered = widget.uidToName.entries
+        .where((e) => e.key != widget.currentUserUid) // Don't mention self
+        .where((e) => e.value.toLowerCase().contains(query.toLowerCase()))
+        .take(10)
+        .toList();
+
+    if (filtered.isEmpty) {
+      _removeMentionOverlay();
+      return;
+    }
+
+    _showOrUpdateMentionOverlay(filtered);
+  }
+
+  void _showOrUpdateMentionOverlay(List<MapEntry<String, String>> members) {
+    _removeMentionOverlay();
+    _mentionOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        width: 200,
+        child: CompositedTransformFollower(
+          link: widget.layerLink,
+          targetAnchor: Alignment.topLeft,
+          followerAnchor: Alignment.bottomLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: members.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final entry = members[index];
+                  return ListTile(
+                    dense: true,
+                    leading: CircleAvatar(
+                      radius: 12,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                      child: Text(
+                        entry.value[0],
+                        style: const TextStyle(fontSize: 10, color: AppColors.primaryDark),
+                      ),
+                    ),
+                    title: Text(
+                      entry.value,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    onTap: () => _selectMention(entry),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_mentionOverlay!);
+  }
+
+  void _removeMentionOverlay() {
+    _mentionOverlay?.remove();
+    _mentionOverlay = null;
+  }
+
+  void _selectMention(MapEntry<String, String> entry) {
+    final text = widget.controller.text;
+    final cursorPos = widget.controller.selection.baseOffset;
+    final textBeforeCursor = text.substring(0, cursorPos);
+    final atIndex = textBeforeCursor.lastIndexOf('@');
+    final beforeAt = text.substring(0, atIndex);
+    final afterCursor = text.substring(cursorPos);
+    widget.controller.value = TextEditingValue(
+      text: '$beforeAt@${entry.value} $afterCursor',
+      selection: TextSelection.collapsed(offset: beforeAt.length + entry.value.length + 2),
+    );
+    _removeMentionOverlay();
+  }
+
+  @override
+  void dispose() {
+    _removeMentionOverlay();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1570,9 +1694,9 @@ class _MessageInputBar extends StatelessWidget {
       child: SafeArea(
         child: Row(
           children: [
-            if (isFaculty && onTaskCreate != null)
+            if (widget.isFaculty && widget.onTaskCreate != null)
               GestureDetector(
-                onTap: onTaskCreate,
+                onTap: widget.onTaskCreate,
                 child: Container(
                   width: 44,
                   height: 44,
@@ -1586,29 +1710,36 @@ class _MessageInputBar extends StatelessWidget {
                 ),
               ),
             Expanded(
-              child: TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  hintText: 'Type a message...',
-                  hintStyle: const TextStyle(color: AppColors.textSecondary),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  filled: true,
-                  fillColor: const Color(0xFFF5F5F5),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+              child: CompositedTransformTarget(
+                link: widget.layerLink,
+                child: TextField(
+                  controller: widget.controller,
+                  onChanged: (_) => _onTextChanged(),
+                  decoration: InputDecoration(
+                    hintText: 'Type a message...',
+                    hintStyle: const TextStyle(color: AppColors.textSecondary),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
+                  onSubmitted: (_) {
+                    _removeMentionOverlay();
+                    widget.onSend();
+                  },
+                  textInputAction: TextInputAction.send,
+                  minLines: 1,
+                  maxLines: 4,
                 ),
-                onSubmitted: (_) => onSend(),
-                textInputAction: TextInputAction.send,
-                minLines: 1,
-                maxLines: 4,
               ),
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: onSend,
+              onTap: widget.onSend,
               child: Container(
                 width: 44,
                 height: 44,
