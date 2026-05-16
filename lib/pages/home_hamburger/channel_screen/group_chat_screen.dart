@@ -358,8 +358,38 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           for (final m in _firestoreMembers) m['uid'] as String: m['name'] as String,
         };
       });
+      _ensureMemberNotificationStrategies();
     } catch (e) {
       debugPrint('Error loading members: $e');
+    }
+  }
+
+  Future<void> _ensureMemberNotificationStrategies() async {
+    /// Initialize default notificationStrategy for each group chat member doc.
+    /// Per D-17: students get 'mentionsOnly' for group chats, faculty get 'normal'.
+    /// Uses merge:true so existing user-set strategies are NOT overwritten.
+    /// TODO: When DMs are migrated to Firestore-backed storage, their member docs at
+    /// instructor_chats/{chatId}/members/{uid} should also receive 'normal' defaults
+    /// (D-17: students get 'normal' for DMs, faculty get 'normal' for everything).
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      for (final member in _firestoreMembers) {
+        final uid = member['uid'] as String;
+        final role = member['role'] as String;
+        final memberRef = FirebaseFirestore.instance
+            .collection('group_chats')
+            .doc(_chatId)
+            .collection('members')
+            .doc(uid);
+        // Default: Admin (faculty) -> 'normal', Member (student) -> 'mentionsOnly'
+        final defaultStrategy = (role == 'Admin') ? 'normal' : 'mentionsOnly';
+        batch.set(memberRef, {
+          'notificationStrategy': defaultStrategy,
+        }, SetOptions(merge: true));
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error ensuring notification strategies: $e');
     }
   }
 
