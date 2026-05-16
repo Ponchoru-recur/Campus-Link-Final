@@ -1,0 +1,166 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/chat_item.dart';
+import 'package:luminescence/pages/home_hamburger/channel_screen/group_chat_screen.dart';
+
+/// Singleton service managing FCM push notification lifecycle.
+///
+/// Responsibilities:
+/// 1. FCM token registration and refresh, stored in Firestore users/{uid}/fcmTokens
+/// 2. Foreground message handling via flutter_local_notifications
+/// 3. Background message handling (top-level handler registered in main.dart)
+/// 4. Notification tap navigation to correct chat screen
+/// 5. Android notification channel creation (high_importance_channel, silent_channel)
+class NotificationService {
+  static final NotificationService instance = NotificationService._();
+  NotificationService._();
+
+  final _firebaseMessaging = FirebaseMessaging.instance;
+  final _localNotifications = FlutterLocalNotificationsPlugin();
+  bool _initialized = false;
+
+  /// Global navigator key for notification-tap navigation without BuildContext.
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
+  /// Initialize FCM lifecycle: channels, permissions, token, listeners.
+  ///
+  /// Idempotent — safe to call multiple times.
+  Future<void> initialize() async {
+    if (_initialized) return;
+    _initialized = true;
+
+    // 1. Create Android notification channels
+    const highChannel = AndroidNotificationChannel(
+      'high_importance_channel',
+      'Important Notifications',
+      description: 'For @mentions, DMs, and task notifications',
+      importance: Importance.max,
+    );
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(highChannel);
+
+    const silentChannel = AndroidNotificationChannel(
+      'silent_channel',
+      'Silent Notifications',
+      description: 'For badge-only updates',
+      importance: Importance.min,
+    );
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(silentChannel);
+
+    // 2. Initialize flutter_local_notifications with Android settings
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initSettings =
+        InitializationSettings(android: androidSettings);
+    await _localNotifications.initialize(settings: initSettings);
+
+    // 3. Request notification permissions (iOS only, no-op on Android)
+    await _firebaseMessaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    // 4. Get initial FCM token and store it
+    final token = await _firebaseMessaging.getToken();
+    if (token != null) {
+      await _saveToken(token);
+    }
+
+    // 5. Listen for token refresh
+    _firebaseMessaging.onTokenRefresh.listen(_saveToken);
+
+    // 6. Handle foreground messages (show local notification)
+    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+
+    // 7. Handle notification tap (app opened from background via notification)
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+
+    // 8. Check if app was opened from a terminated notification (cold start)
+    final initialMessage = await _firebaseMessaging.getInitialMessage();
+    if (initialMessage != null) {
+      _handleNotificationTap(initialMessage);
+    }
+  }
+
+  /// Store the FCM token in Firestore under users/{uid}/fcmTokens.
+  ///
+  /// Uses FieldValue.arrayUnion so multiple device tokens can accumulate.
+  Future<void> _saveToken(String token) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'fcmTokens': FieldValue.arrayUnion([token]),
+      });
+    } catch (e) {
+      debugPrint('Error saving FCM token: $e');
+    }
+  }
+
+  /// Handle a foreground FCM message by showing a local notification.
+  void _handleForegroundMessage(RemoteMessage message) {
+    final title = message.notification?.title ?? 'Campus Link';
+    final body = message.notification?.body ?? 'New message';
+
+    final notificationDetails = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'high_importance_channel',
+        'Important Notifications',
+        channelDescription: 'For @mentions, DMs, and task notifications',
+        importance: Importance.max,
+        priority: Priority.high,
+      ),
+    );
+
+    _localNotifications.show(
+      id: message.messageId.hashCode,
+      title: title,
+      body: body,
+      notificationDetails: notificationDetails,
+      payload: message.data['chatId'] as String?,
+    );
+  }
+
+  /// Handle notification tap by navigating to the relevant chat screen.
+  ///
+  /// Parses chatId and chatType from the FCM data payload, clears the
+  /// navigation stack to ChatsScreen, then pushes GroupChatScreen.
+  void _handleNotificationTap(RemoteMessage message) {
+    final chatId = message.data['chatId'] as String?;
+    if (chatId == null || chatId.isEmpty) return;
+
+    final navigatorState = navigatorKey.currentState;
+    if (navigatorState == null) return;
+
+    navigatorState.pushNamedAndRemoveUntil('/chatScreen', (route) => false);
+
+    // Push the GroupChatScreen with the correct ChatItem
+    navigatorState.push(
+      MaterialPageRoute(
+        builder: (context) => GroupChatScreen(
+          chat: ChatItem(
+            id: chatId,
+            name: message.data['chatName'] as String? ?? 'Chat',
+            lastMessage: '',
+            time: '',
+            type: ChatType.groupChat,
+          ),
+        ),
+      ),
+    );
+  }
+}
