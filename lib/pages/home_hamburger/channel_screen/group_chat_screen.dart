@@ -246,6 +246,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   void initState() {
     super.initState();
     _chatId = widget.chat.id;
+    NotificationService.activeChatId = _chatId;
     _groupName = widget.chat.name;
     _checkAdminStatus();
     _resetUnreadCount();
@@ -1275,6 +1276,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   @override
   void dispose() {
+    NotificationService.activeChatId = null;
     _messagesSubscription?.cancel();
     _groupDocSubscription?.cancel();
     _pinnedSubscription?.cancel();

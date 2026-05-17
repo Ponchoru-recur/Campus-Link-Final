@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:luminescence/models/task.dart';
+import 'package:luminescence/services/notification_service.dart';
 
 class TaskService {
   final _auth = FirebaseAuth.instance;
@@ -117,6 +118,38 @@ class TaskService {
         'lastMessageAt': FieldValue.serverTimestamp(),
       });
 
+      // Fire notification (bypasses muted strategy for tasks)
+      String chatName = 'Task';
+      if (chatType == 'group') {
+        final groupDoc = await _firestore.collection('group_chats').doc(chatId).get();
+        if (groupDoc.exists) {
+          chatName = groupDoc.data()?['name'] as String? ?? 'Group Chat';
+        }
+      } else if (chatType == 'dm') {
+        final dmDoc = await _firestore.collection('direct_messages').doc(chatId).get();
+        if (dmDoc.exists) {
+          final participants = dmDoc.data()?['participants'] as List<dynamic>?;
+          if (participants != null) {
+            final otherUid = participants.cast<String>().firstWhere((e) => e != user.uid, orElse: () => '');
+            if (otherUid.isNotEmpty) {
+              final otherDoc = await _firestore.collection('users').doc(otherUid).get();
+              chatName = otherDoc.data()?['name'] as String? ?? otherDoc.data()?['email'] as String? ?? 'DM';
+            }
+          }
+        }
+      }
+      NotificationService.instance.sendTieredNotification(
+        chatId: chatId,
+        messageId: taskId,
+        senderId: user.uid,
+        senderName: creatorName,
+        chatName: chatName,
+        text: '\u{1F4CB} $title\n\n$description',
+        mentionedUids: [],
+        isEveryone: false,
+        isTask: true,
+      );
+
       if (chatType == 'group' && targetUids != null) {
         final chatDoc = await chatRef.get();
         if (chatDoc.exists) {
@@ -165,7 +198,11 @@ class TaskService {
 
     if (title != null) updates['title'] = title;
     if (description != null) updates['description'] = description;
-    if (deadline != null) updates['deadline'] = deadline;
+    if (deadline != null) {
+      // Store as Timestamp, not String — prevents stream crash in fromFirestore
+      final parsed = DateTime.tryParse(deadline);
+      updates['deadline'] = parsed != null ? Timestamp.fromDate(parsed) : deadline;
+    }
     if (clearDeadline) updates['deadline'] = null;
     if (links != null) updates['links'] = links.map((l) => l.toMap()).toList();
 

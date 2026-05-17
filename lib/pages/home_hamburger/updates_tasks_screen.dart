@@ -560,13 +560,16 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
     return '$daysLeft days left';
   }
 
-  void _editTask(Task task) {
-    Navigator.push(
+  Future<void> _editTask(Task task) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => _EditTaskScreen(task: task),
       ),
     );
+    // Re-setup stream to reflect changes immediately
+    _tasksSubscription?.cancel();
+    _setupTasksStream();
   }
 
   Future<void> _confirmDelete(Task task) async {

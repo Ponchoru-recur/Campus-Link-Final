@@ -52,7 +52,11 @@ class Task {
       chatId: data['chatId'] ?? '',
       chatType: data['chatType'] ?? 'group',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      deadline: (data['deadline'] as Timestamp?)?.toDate(),
+      deadline: (data['deadline'] is Timestamp
+                ? (data['deadline'] as Timestamp).toDate()
+                : data['deadline'] is String
+                    ? DateTime.tryParse(data['deadline'] as String)
+                    : null),
       links: (data['links'] as List<dynamic>? ?? [])
           .map((e) => TaskLink.fromMap(e as Map<String, dynamic>))
           .toList(),

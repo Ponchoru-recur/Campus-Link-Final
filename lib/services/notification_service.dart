@@ -30,6 +30,11 @@ class NotificationService {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
+  /// ID of chat user currently viewing.
+  /// Suppresses foreground notification when matching incoming message chatId.
+  static String? _activeChatId;
+  static set activeChatId(String? id) => _activeChatId = id;
+
   /// Initialize FCM lifecycle: channels, permissions, token, listeners.
   ///
   /// Idempotent — safe to call multiple times.
@@ -138,7 +143,12 @@ class NotificationService {
   }
 
   /// Handle a foreground FCM message by showing a local notification.
+  ///
+  /// Suppressed when user is actively viewing the same chat (_activeChatId).
   void _handleForegroundMessage(RemoteMessage message) {
+    final chatId = message.data['chatId'] as String?;
+    if (chatId != null && chatId == _activeChatId) return;
+
     final title = message.notification?.title ?? 'Campus Link';
     final body = message.notification?.body ?? 'New message';
 

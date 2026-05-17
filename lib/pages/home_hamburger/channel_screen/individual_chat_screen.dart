@@ -11,6 +11,7 @@ import 'package:luminescence/pages/tasks/create_task_screen.dart';
 import 'package:luminescence/themes/app_colors.dart';
 import 'package:luminescence/widgets/task_bubble.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:luminescence/services/notification_service.dart';
 
 final _urlRegex = RegExp(
   r'(https?://[^\s<]+)',
@@ -119,6 +120,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
         _otherParticipantUid: _otherParticipantName,
       };
     }
+    NotificationService.activeChatId = _chatId;
     _setupMessagesStream();
   }
 
@@ -425,6 +427,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
 
   @override
   void dispose() {
+    NotificationService.activeChatId = null;
     _messagesSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
