@@ -311,7 +311,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                       decoration: _inputDecoration(
                         label: 'Task Title',
                         hint: 'Enter a clear task title...',
-                        icon: Icons.title,
                       ),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Title is required';
@@ -339,7 +338,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
               // Deadline Section
               _SectionCard(
@@ -349,132 +348,167 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                   children: [
                     InkWell(
                       onTap: _selectDeadline,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(10),
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: BorderRadius.circular(14),
+                          color: const Color(0xFFF7F7F7),
+                          borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: Colors.grey[200]!),
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(Icons.calendar_today,
-                                  size: 18, color: AppColors.primary),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        child: _deadline == null
+                            ? Row(
                                 children: [
-                                  Text(
-                                    _deadline == null
-                                        ? 'Tap to set deadline'
-                                        : DateFormat('EEEE, MMMM d, y').format(_deadline!),
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w500,
-                                      color: _deadline == null
-                                          ? Colors.grey[500]
-                                          : AppColors.textPrimary,
+                                  Icon(Icons.calendar_today,
+                                      size: 16, color: Colors.grey[400]),
+                                  const SizedBox(width: 10),
+                                  Text('Tap to set deadline',
+                                      style: TextStyle(
+                                          fontSize: 14, color: Colors.grey[500])),
+                                ],
+                              )
+                            : Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color: AppColors.primary.withValues(alpha: 0.2)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.calendar_today,
+                                            size: 14, color: AppColors.primary),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          DateFormat('MMM d, y  h:mm a').format(_deadline!),
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  if (_deadline != null)
-                                    Text(
-                                      '${_deadline!.hour.toString().padLeft(2, '0')}:${_deadline!.minute.toString().padLeft(2, '0')}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[500],
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: () => setState(() => _deadline = null),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[200],
+                                        shape: BoxShape.circle,
                                       ),
+                                      child: Icon(Icons.close,
+                                          size: 12, color: Colors.grey[600]),
                                     ),
+                                  ),
                                 ],
                               ),
-                            ),
-                            if (_deadline != null)
-                              IconButton(
-                                icon: const Icon(Icons.close, size: 18),
-                                onPressed: () => setState(() => _deadline = null),
-                                splashRadius: 18,
-                              ),
-                          ],
-                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
               // Links Section
               _SectionCard(
                 icon: Icons.link,
                 title: 'Attached Links',
-                trailing: TextButton.icon(
-                  onPressed: _addLink,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add Link'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                child: _links.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: [
-                            Icon(Icons.link_off, size: 16, color: Colors.grey[400]),
-                            const SizedBox(width: 8),
-                            Text('No links added yet',
-                                style: TextStyle(color: Colors.grey[400], fontSize: 13)),
-                          ],
-                        ),
-                      )
-                    : Wrap(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_links.isNotEmpty) ...[
+                      Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: _links.map((link) {
-                          return InkWell(
-                            onTap: () => _openLink(link),
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.link, size: 14, color: AppColors.primary),
-                                  const SizedBox(width: 6),
-                                  Text(link.title,
-                                      style: const TextStyle(
-                                          fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w500)),
-                                  const SizedBox(width: 6),
-                                  GestureDetector(
-                                    onTap: () => setState(() => _links.remove(link)),
-                                    child: Icon(Icons.close, size: 14, color: Colors.grey[500]),
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: AppColors.primary.withValues(alpha: 0.25),
+                                  width: 0.5),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => _openLink(link),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.link,
+                                          size: 13, color: AppColors.primary),
+                                      const SizedBox(width: 4),
+                                      Text(link.title,
+                                          style: const TextStyle(
+                                              fontSize: 12,
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.w500)),
+                                    ],
                                   ),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(width: 6),
+                                GestureDetector(
+                                  onTap: () =>
+                                      setState(() => _links.remove(link)),
+                                  child: Icon(Icons.close,
+                                      size: 12, color: Colors.grey[400]),
+                                ),
+                              ],
                             ),
                           );
                         }).toList(),
                       ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_links.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Icon(Icons.link_off,
+                                size: 16, color: Colors.grey[400]),
+                            const SizedBox(width: 8),
+                            Text('No links added yet',
+                                style: TextStyle(
+                                    color: Colors.grey[400], fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    OutlinedButton.icon(
+                      onPressed: _addLink,
+                      icon: const Icon(Icons.add, size: 15),
+                      label: const Text('Add Link',
+                          style: TextStyle(fontWeight: FontWeight.w500)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.3)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               // Group selector (global mode) or target chat label (prefilled mode)
               if (widget.prefilledChatId == null && _userRole == 'faculty') ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 _SectionCard(
                   icon: Icons.group,
                   title: 'Assign to Groups',
@@ -508,7 +542,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 ),
               ],
               if (widget.prefilledChatId != null) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 _SectionCard(
                   icon: Icons.group,
                   title: 'Target Chat',
@@ -529,21 +563,22 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                   ),
                 ),
               ],
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
 
               // Submit Button
               SizedBox(
                 width: double.infinity,
-                height: 54,
+                height: 56,
                 child: ElevatedButton(
                   onPressed: _isSubmitting ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    elevation: 2,
-                    shadowColor: AppColors.primary.withValues(alpha: 0.4),
+                    disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
                   child: _isSubmitting
@@ -577,28 +612,31 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   InputDecoration _inputDecoration({
     required String label,
     required String hint,
-    required IconData icon,
+    IconData? icon,
   }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, size: 20),
+      prefixIcon: icon != null ? Padding(
+        padding: const EdgeInsets.only(left: 14, right: 8),
+        child: Icon(icon, size: 18, color: Colors.grey[400]),
+      ) : null,
       filled: true,
-      fillColor: Colors.grey[50],
+      fillColor: const Color(0xFFF7F7F7),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: Colors.grey[300]!),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: Colors.grey[200]!),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: AppColors.urgentRed),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -625,7 +663,7 @@ class _SectionCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -637,17 +675,23 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 12, 8),
+          // Section header with subtle background tint
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(18, 14, 12, 14),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.04),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
+                    color: AppColors.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icon, size: 16, color: AppColors.primary),
+                  child: Icon(icon, size: 15, color: AppColors.primary),
                 ),
                 const SizedBox(width: 10),
                 Text(title,
@@ -656,13 +700,12 @@ class _SectionCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         color: AppColors.textSecondary)),
                 const Spacer(),
-                ?trailing,
+                if (trailing != null) trailing!,
               ],
             ),
           ),
-          const Divider(height: 1, indent: 18, endIndent: 18),
           Padding(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 20),
             child: child,
           ),
         ],
