@@ -86,6 +86,11 @@ class TaskService {
 
     await taskRef.set(taskData);
 
+    // Seed student responses for tracking
+    if (targetUids != null && targetUids.isNotEmpty) {
+      await seedStudentResponses(taskId, targetUids, user.uid);
+    }
+
     if (chatId != null && chatType != null) {
       final messagesRef = chatType == 'group'
           ? _firestore.collection('group_chats').doc(chatId).collection('messages')
@@ -239,6 +244,37 @@ class TaskService {
   Future<void> unmarkTaskDone(String taskId, String uid) async {
     await _firestore.collection('tasks').doc(taskId).update({
       'doneByUids': FieldValue.arrayRemove([uid]),
+    });
+  }
+
+  /// Seed studentResponses map for all targetUids (excluding creator).
+  Future<void> seedStudentResponses(String taskId, List<String> targetUids, String creatorUid) async {
+    final seed = <String, dynamic>{};
+    for (final uid in targetUids) {
+      if (uid == creatorUid) continue;
+      seed['studentResponses.$uid'] = {
+        'seen': false,
+        'acknowledged': false,
+      };
+    }
+    if (seed.isNotEmpty) {
+      await _firestore.collection('tasks').doc(taskId).update(seed);
+    }
+  }
+
+  /// Mark student's task as acknowledged.
+  Future<void> setAcknowledged(String taskId, String uid) async {
+    await _firestore.collection('tasks').doc(taskId).update({
+      'studentResponses.$uid.acknowledged': true,
+      'studentResponses.$uid.acknowledgedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Mark student's task as seen (auto-triggered by scroll visibility).
+  Future<void> setSeen(String taskId, String uid) async {
+    await _firestore.collection('tasks').doc(taskId).update({
+      'studentResponses.$uid.seen': true,
+      'studentResponses.$uid.seenAt': FieldValue.serverTimestamp(),
     });
   }
 

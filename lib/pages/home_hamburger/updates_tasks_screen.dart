@@ -2,9 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 import 'package:luminescence/models/task.dart';
 import 'package:luminescence/services/task_service.dart';
 import 'package:luminescence/themes/app_colors.dart';
+import 'package:luminescence/widgets/acknowledge_button.dart';
+import 'package:luminescence/widgets/acknowledgment_status_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 
@@ -27,6 +30,7 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
 
   // --- Search, Filter, Sort state ---
   final TextEditingController _searchController = TextEditingController();
+  final Set<String> _seenSent = {};
   String _searchQuery = '';
   String _activeFilter = 'All'; // All | Completed | Deleted | Due Soon | Overdue
   String _activeSort = 'Newest First';
@@ -355,6 +359,34 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
     _tasksSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Trigger seen flag if not already marked.
+  void _maybeMarkSeen(Task task) {
+    final uid = _userId;
+    if (uid == null) return;
+    final key = '${task.id}:$uid';
+    if (_seenSent.contains(key)) return;
+    final response = task.studentResponses[uid];
+    if (response != null && response.seen) return;
+    _seenSent.add(key);
+    _taskService.setSeen(task.id, uid);
+  }
+
+  /// Open faculty acknowledgment status bottom sheet.
+  void _openAckStatusSheet(Task task) {
+    if (_userRole != 'faculty' || task.createdBy != _userId) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => AcknowledgmentStatusSheet(
+        task: task,
+        chatId: task.chatId,
+      ),
+    );
   }
 
   @override
@@ -728,13 +760,25 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
   }
 
   Widget _buildTaskCard(Task task, {bool isDone = false, bool isDeleted = false}) {
+    final uid = _userId;
+    final response = uid != null ? task.studentResponses[uid] : null;
+    final isAcknowledged = response?.acknowledged ?? false;
     final isCreator = task.createdBy == _userId;
     final isFaculty = _userRole == 'faculty';
     final overdue = _isOverdue(task);
     final deadlineColor = isDeleted ? Colors.grey[500]! : _getDeadlineColor(task);
-    final uid = _userId;
 
-    return GestureDetector(
+    return VisibilityDetector(
+      key: ValueKey('task-vis-${task.id}'),
+      onVisibilityChanged: (info) {
+        if (info.visibleFraction >= 0.8 && !isDeleted && !isDone) {
+          _maybeMarkSeen(task);
+        }
+      },
+      child: GestureDetector(
+      onTap: isFaculty && task.createdBy == _userId && !isDone && !isDeleted
+          ? () => _openAckStatusSheet(task)
+          : null,
       onLongPress: isDone || isDeleted
           ? null
           : () {
@@ -996,6 +1040,15 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
                           ),
                         ),
                       ],
+                      if (!isFaculty && uid != null && !isDone && !isDeleted)
+                        Expanded(
+                          child: AcknowledgeButton(
+                            taskId: task.id,
+                            uid: uid,
+                            isAcknowledged: isAcknowledged,
+                            compact: false,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1003,7 +1056,8 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
           ),
         ),
       ),
-    );
+      ),
+      );
   }
 
   String _daysLeftText(Task task) {

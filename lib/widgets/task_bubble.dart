@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:luminescence/models/task.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/message.dart';
+import 'package:luminescence/pages/home_hamburger/updates_tasks_screen.dart';
 import 'package:luminescence/services/task_service.dart';
 import 'package:luminescence/themes/app_colors.dart';
+import 'package:luminescence/widgets/acknowledge_button.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 
@@ -20,6 +23,7 @@ class TaskBubble extends StatefulWidget {
 class _TaskBubbleState extends State<TaskBubble> {
   DocumentSnapshot? _taskDoc;
   bool _loadingTask = false;
+  final String _currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
   @override
   void initState() {
@@ -93,12 +97,26 @@ class _TaskBubbleState extends State<TaskBubble> {
         ? Colors.grey[400]!
         : brandGreen.withValues(alpha: 0.35);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          if (!isMe) ...[
+    // Check student response for acknowledge button
+    final studentResponses = (data?['studentResponses'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+    final myResponse = studentResponses[_currentUid] as Map<String, dynamic>?;
+    final isAcknowledged = myResponse?['acknowledged'] == true;
+    final showAckBtn = !deleted && !isMe && !isAcknowledged && _currentUid.isNotEmpty;
+
+    return GestureDetector(
+      onTap: () {
+        if (_currentUid.isEmpty) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const UpdatesTasksScreen()),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+          children: [
+            if (!isMe) ...[
             CircleAvatar(
               radius: 14,
               backgroundColor: brandGreen.withValues(alpha: 0.2),
@@ -359,12 +377,27 @@ class _TaskBubbleState extends State<TaskBubble> {
                       ],
                     ),
                   ),
+
+                  // Acknowledge button for students
+                  if (showAckBtn) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: AcknowledgeButton(
+                        taskId: widget.message.taskId ?? '',
+                        uid: _currentUid,
+                        isAcknowledged: false,
+                        compact: true,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
         ],
-      ),
-    );
+      ),   // closes Row
+      ),   // closes Padding
+    );     // closes GestureDetector
   }
 }

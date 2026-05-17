@@ -20,6 +20,7 @@ class Task {
   final int? greenThresholdDays; // per-task override for green deadline color
   final int? yellowThresholdDays; // per-task override for yellow deadline color
   final int? redThresholdDays; // per-task override for red deadline color
+  final Map<String, StudentTaskResponse> studentResponses;
 
   const Task({
     required this.id,
@@ -39,6 +40,7 @@ class Task {
     this.greenThresholdDays,
     this.yellowThresholdDays,
     this.redThresholdDays,
+    this.studentResponses = const {},
   });
 
   factory Task.fromFirestore(DocumentSnapshot doc) {
@@ -67,6 +69,10 @@ class Task {
       greenThresholdDays: data['greenThresholdDays'] as int?,
       yellowThresholdDays: data['yellowThresholdDays'] as int?,
       redThresholdDays: data['redThresholdDays'] as int?,
+      studentResponses: (data['studentResponses'] as Map<String, dynamic>?)
+              ?.map((k, v) =>
+                  MapEntry(k, StudentTaskResponse.fromMap(v as Map<String, dynamic>))) ??
+          {},
     );
   }
 
@@ -87,6 +93,39 @@ class Task {
         'greenThresholdDays': greenThresholdDays,
         'yellowThresholdDays': yellowThresholdDays,
         'redThresholdDays': redThresholdDays,
+        'studentResponses':
+            studentResponses.map((k, v) => MapEntry(k, v.toMap())),
+      };
+}
+
+/// Per-student response tracking for a task.
+class StudentTaskResponse {
+  final bool seen;
+  final DateTime? seenAt;
+  final bool acknowledged;
+  final DateTime? acknowledgedAt;
+
+  const StudentTaskResponse({
+    this.seen = false,
+    this.seenAt,
+    this.acknowledged = false,
+    this.acknowledgedAt,
+  });
+
+  factory StudentTaskResponse.fromMap(Map<String, dynamic> m) {
+    return StudentTaskResponse(
+      seen: m['seen'] ?? false,
+      seenAt: (m['seenAt'] as Timestamp?)?.toDate(),
+      acknowledged: m['acknowledged'] ?? false,
+      acknowledgedAt: (m['acknowledgedAt'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'seen': seen,
+        if (seenAt != null) 'seenAt': Timestamp.fromDate(seenAt!),
+        'acknowledged': acknowledged,
+        if (acknowledgedAt != null) 'acknowledgedAt': Timestamp.fromDate(acknowledgedAt!),
       };
 }
 
