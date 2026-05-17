@@ -104,16 +104,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         if (uid.isNotEmpty && uid != user.uid) mentionedUids.add(uid);
       }
 
-      // @everyone: faculty-only pinned message (D-05, D-06)
+      // @everyone: pinned message for all roles (D-05, D-06)
       final hasEveryone = text.contains('@everyone');
       DateTime? pinnedUntil;
       if (hasEveryone) {
-        if (_isFaculty) {
-          pinnedUntil = DateTime.now().add(const Duration(hours: 24));
-        } else {
-          // Strip @everyone from non-faculty messages silently
-          text = text.replaceAll('@everyone', '').trim();
-        }
+        pinnedUntil = DateTime.now().add(const Duration(hours: 24));
       }
 
       final docRef = await messagesRef.add({
@@ -128,8 +123,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           'pinnedUntil': Timestamp.fromDate(pinnedUntil), // NEW per D-11
       });
 
-      // Audit log: record @everyone usage if faculty
-      if (hasEveryone && _isFaculty) {
+      // Audit log: record @everyone usage
+      if (hasEveryone) {
         final everyoneCallsRef = firestore
             .collection('group_chats').doc(_chatId)
             .collection('everyone_calls');
@@ -145,6 +140,29 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         });
       }
 
+      // Audit log: record @mentions for each mentioned user
+      if (mentionedUids.isNotEmpty) {
+        final mentionsRef = firestore
+            .collection('group_chats').doc(_chatId)
+            .collection('mentions');
+        final writeBatch = firestore.batch();
+        for (final uid in mentionedUids) {
+          final mentionDoc = mentionsRef.doc();
+          writeBatch.set(mentionDoc, {
+            'senderId': user.uid,
+            'senderName': senderName,
+            'messageId': docRef.id,
+            'text': text,
+            'mentionedUid': uid,
+            'timestamp': FieldValue.serverTimestamp(),
+            'expireAt': Timestamp.fromMillisecondsSinceEpoch(
+              DateTime.now().add(const Duration(hours: 24)).millisecondsSinceEpoch,
+            ),
+          });
+        }
+        writeBatch.commit();
+      }
+
       // Fire-and-forget notification dispatch to Worker
       NotificationService.instance.sendTieredNotification(
         chatId: _chatId,
@@ -154,7 +172,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         chatName: widget.chat.name,
         text: text,
         mentionedUids: mentionedUids,
-        isEveryone: hasEveryone && _isFaculty,
+        isEveryone: hasEveryone,
         isTask: false,
       );
 
@@ -1345,8 +1363,81 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-  void _showEveryoneAudit() {
+  Widget _buildAuditList(Stream<QuerySnapshot> stream, ScrollController scrollController, {
+    String emptyMessage = 'Nothing yet',
+  }) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: stream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) {
+          return Center(
+            child: Text(
+              emptyMessage,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          );
+        }
+        return ListView.separated(
+          controller: scrollController,
+          itemCount: docs.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+            final senderName = data['senderName'] ?? 'Unknown';
+            final messageText = data['text'] ?? '';
+            final messageId = data['messageId'] ?? '';
+            final ts = data['timestamp'] as Timestamp?;
+            final timeStr = ts != null ? _formatTime(ts.toDate()) : '';
+            final msgIndex = _messages.indexWhere((m) => m.id == messageId);
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                child: Text(
+                  senderName.isNotEmpty ? senderName[0] : '?',
+                  style: const TextStyle(
+                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              title: Text(
+                senderName,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                messageText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Text(
+                timeStr,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                if (msgIndex >= 0) _scrollToMessage(msgIndex);
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAuditSheet() {
     final db = FirebaseFirestore.instance;
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1354,118 +1445,78 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) {
-        final auditRef = db
-            .collection('group_chats').doc(_chatId)
-            .collection('everyone_calls')
-            .orderBy('timestamp', descending: true)
-            .limit(50);
-        return DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          minChildSize: 0.3,
-          maxChildSize: 0.85,
-          expand: false,
-          builder: (context, scrollController) {
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.history, size: 20, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      const Text(
-                        '@everyone History',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+        return DefaultTabController(
+          length: 2,
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.5,
+            minChildSize: 0.3,
+            maxChildSize: 0.85,
+            expand: false,
+            builder: (context, scrollController) {
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.history, size: 20, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Mentions & @everyone',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const Divider(),
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: auditRef.snapshots(),
-                      builder: (context, snapshot) {
-                        if (snapshot.hasError) {
-                          return Center(child: Text('Error: ${snapshot.error}'));
-                        }
-                        if (!snapshot.hasData) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        final docs = snapshot.data!.docs;
-                        if (docs.isEmpty) {
-                          return const Center(
-                            child: Text(
-                              'No @everyone calls in the last 24 hours',
-                              style: TextStyle(color: AppColors.textSecondary),
-                            ),
-                          );
-                        }
-                        return ListView.separated(
-                          controller: scrollController,
-                          itemCount: docs.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final data = docs[index].data() as Map<String, dynamic>;
-                            final senderName = data['senderName'] ?? 'Unknown';
-                            final messageText = data['text'] ?? '';
-                            final messageId = data['messageId'] ?? '';
-                            final ts = data['timestamp'] as Timestamp?;
-                            final timeStr = ts != null
-                                ? _formatTime(ts.toDate())
-                                : '';
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                                child: Text(
-                                  senderName.isNotEmpty ? senderName[0] : '?',
-                                  style: const TextStyle(
-                                    color: AppColors.primaryDark,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                              title: Text(
-                                senderName,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              subtitle: Text(
-                                messageText,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              trailing: Text(
-                                timeStr,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              onTap: () {
-                                Navigator.pop(context);
-                                final idx = _messages.indexWhere(
-                                  (m) => m.id == messageId,
-                                );
-                                if (idx >= 0) _scrollToMessage(idx);
-                              },
-                            );
-                          },
-                        );
-                      },
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            );
-          },
+                    const SizedBox(height: 8),
+                    const TabBar(
+                      labelColor: AppColors.primary,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      indicatorColor: AppColors.primary,
+                      tabs: [
+                        Tab(text: '@everyone'),
+                        Tab(text: '@you'),
+                      ],
+                    ),
+                    const Divider(),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          // @everyone tab
+                          _buildAuditList(
+                            db
+                                .collection('group_chats').doc(_chatId)
+                                .collection('everyone_calls')
+                                .orderBy('timestamp', descending: true)
+                                .limit(50)
+                                .snapshots(),
+                            scrollController,
+                            emptyMessage: 'No @everyone calls in the last 24 hours',
+                          ),
+                          // @you tab
+                          _buildAuditList(
+                            db
+                                .collection('group_chats').doc(_chatId)
+                                .collection('mentions')
+                                .where('mentionedUid', isEqualTo: currentUid)
+                                .orderBy('timestamp', descending: true)
+                                .limit(50)
+                                .snapshots(),
+                            scrollController,
+                            emptyMessage: 'No one mentioned you recently',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         );
       },
     );
@@ -1535,10 +1586,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               },
               onUnpin: _unpinMessage,
               formatTime: _formatTime,
-              onShowHistory: _showEveryoneAudit,
+              onShowHistory: _showAuditSheet,
             )
-          else if (_isFaculty)
-            _EveryoneHistoryButton(onShowHistory: _showEveryoneAudit),
+          else
+            _EveryoneHistoryButton(onShowHistory: _showAuditSheet),
           // ── Messages List ──
           Expanded(
             child: ListView.builder(
@@ -1940,7 +1991,8 @@ class _PinnedBar extends StatelessWidget {
         border: const Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       child: InkWell(
-        onTap: onToggle,
+        onTap: onShowHistory,
+        onLongPress: onToggle,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
