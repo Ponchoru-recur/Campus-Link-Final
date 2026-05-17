@@ -571,7 +571,7 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildLinkifiedText(String text, bool isMe) {
+  Widget _buildLinkifiedText(String text, bool isMe, BuildContext context) {
     final matches = _urlRegex.allMatches(text).toList();
     if (matches.isEmpty) {
       return Text(
@@ -703,7 +703,7 @@ class _MessageBubble extends StatelessWidget {
                               fontStyle: FontStyle.italic,
                             ),
                           )
-                        : _buildLinkifiedText(message.text, isMe),
+                        : _buildLinkifiedText(message.text, isMe, context),
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 2, left: 4, right: 4),

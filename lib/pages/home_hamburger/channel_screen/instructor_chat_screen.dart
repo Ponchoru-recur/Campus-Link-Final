@@ -18,6 +18,8 @@ class InstructorChatScreen extends StatefulWidget {
 class _InstructorChatScreenState extends State<InstructorChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  bool _userScrolledUp = false;
+  static const double _scrollThreshold = 80.0;
 
   // Sample messages — replace with real data source later
   final List<Message> _messages = [
@@ -61,15 +63,8 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
       ));
     });
     _controller.clear();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    Future.delayed(const Duration(milliseconds: 100),
+        () => _autoScrollOnNewMessage(force: true));
   }
 
   String _formatTime(DateTime dt) {
@@ -77,6 +72,40 @@ class _InstructorChatScreenState extends State<InstructorChatScreen> {
     final m = dt.minute.toString().padLeft(2, '0');
     final ampm = dt.hour >= 12 ? 'PM' : 'AM';
     return '$h:$m $ampm';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    Future.microtask(() => _scrollToBottom());
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    if ((maxScroll - currentScroll) <= _scrollThreshold) {
+      _userScrolledUp = false;
+    } else {
+      _userScrolledUp = true;
+    }
+  }
+
+  void _autoScrollOnNewMessage({bool force = false}) {
+    if (!force && _userScrolledUp) return;
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    if (!_scrollController.hasClients) return;
+    _userScrolledUp = false;
+    if (_scrollController.position.maxScrollExtent == 0) return;
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
   }
 
   @override

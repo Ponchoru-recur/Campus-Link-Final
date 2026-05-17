@@ -71,7 +71,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
   bool _isOverdue(String? deadlineStr) {
     if (deadlineStr == null) return false;
     try {
-      return DateTime.parse(deadlineStr).isBefore(DateTime.now());
+      final deadline = DateTime.parse(deadlineStr);
+      final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final deadlineDay = DateTime(deadline.year, deadline.month, deadline.day);
+      return deadlineDay.isBefore(today);
     } catch (_) {
       return false;
     }

@@ -273,15 +273,35 @@ class _TaskBubbleState extends State<TaskBubble> {
                       children: links.map((link) => InkWell(
                         onTap: () async {
                           final uri = Uri.tryParse(link.url);
-                          if (uri != null &&
-                              (uri.isScheme('http') || uri.isScheme('https'))) {
+                          if (uri == null ||
+                              !(uri.isScheme('http') || uri.isScheme('https'))) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Not a valid link: ${link.url}'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                            return;
+                          }
+                          try {
                             if (await canLaunchUrl(uri)) {
                               await launchUrl(uri,
                                   mode: LaunchMode.externalApplication);
                             } else if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('No app available to open this link'),
+                                  content: Text('Broken link — no app available to open it'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Could not open link: $e'),
                                   behavior: SnackBarBehavior.floating,
                                 ),
                               );

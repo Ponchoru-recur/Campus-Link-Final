@@ -301,7 +301,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             children: [
               // Title Section
               _SectionCard(
-                icon: Icons.assignment,
+                icon: Icons.warning,
                 title: 'Task Information',
                 child: Column(
                   children: [

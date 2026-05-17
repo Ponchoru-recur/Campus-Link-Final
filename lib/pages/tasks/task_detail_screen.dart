@@ -135,7 +135,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     final deadline = task['deadline'] != null
         ? DateTime.parse(task['deadline'])
         : null;
-    final isOverdue = deadline != null && deadline.isBefore(DateTime.now());
+    final isOverdue = deadline != null && (() {
+      final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final deadlineDay = DateTime(deadline.year, deadline.month, deadline.day);
+      return deadlineDay.isBefore(today);
+    })();
     final isActive = task['isActive'] ?? true;
 
     return SingleChildScrollView(

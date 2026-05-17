@@ -62,6 +62,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   // Messages loaded from Firestore stream
   final List<Message> _messages = [];
 
+  // Auto-scroll
+  bool _userScrolledUp = false;
+  int _lastMessageCount = 0;
+  static const double _scrollThreshold = 80.0;
+
   void _sendMessage() async {
     String text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -213,6 +218,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           }
         }
       }
+    // Force scroll after sending own message
+      _autoScrollOnNewMessage(force: true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -255,6 +262,35 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _loadMembers();
     _setupPinnedStream();
     _loadNotificationStrategy();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    final atBottom = (maxScroll - currentScroll) <= _scrollThreshold;
+    if (atBottom) {
+      _userScrolledUp = false;
+    } else {
+      _userScrolledUp = true;
+    }
+  }
+
+  void _autoScrollOnNewMessage({bool force = false}) {
+    if (!force && _userScrolledUp) return;
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    if (!_scrollController.hasClients) return;
+    _userScrolledUp = false;
+    if (_scrollController.position.maxScrollExtent == 0) return;
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
   }
 
   Future<void> _checkAdminStatus() async {
@@ -374,6 +410,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         }
       });
       _markMessagesAsRead();
+      final isFirstLoad = _lastMessageCount == 0;
+      _lastMessageCount = _messages.length;
+      _autoScrollOnNewMessage(force: isFirstLoad);
       } catch (e, stack) {
         debugPrint('Error processing messages stream: $e');
         debugPrint('$stack');
@@ -1695,7 +1734,7 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildLinkifiedText(String text, bool isMe) {
+  Widget _buildLinkifiedText(String text, bool isMe, BuildContext context) {
     final matches = _urlRegex.allMatches(text).toList();
     if (matches.isEmpty) {
       return Text(
@@ -1723,9 +1762,37 @@ class _MessageBubble extends StatelessWidget {
         child: GestureDetector(
           onTap: () async {
             final uri = Uri.tryParse(url);
-            if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
+            if (uri == null ||
+                !(uri.isScheme('http') || uri.isScheme('https'))) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Not a valid link: $url'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              return;
+            }
+            try {
               if (await canLaunchUrl(uri)) {
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
+              } else if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Broken link — no app available to open it'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Could not open link: $e'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
               }
             }
           },
@@ -1903,7 +1970,7 @@ class _MessageBubble extends StatelessWidget {
                               fontStyle: FontStyle.italic,
                             ),
                           )
-                        : _buildLinkifiedText(message.text, isMe),
+                        : _buildLinkifiedText(message.text, isMe, context),
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
