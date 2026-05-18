@@ -51,6 +51,7 @@ dependencies:
   visibility_detector: ^0.4.0
   firebase_messaging: ^16.2.2
   flutter_local_notifications: ^21.0.0
+  workmanager: ^0.9.0+3
 
 dev_dependencies:
   flutter_test:

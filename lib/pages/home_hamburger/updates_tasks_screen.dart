@@ -214,7 +214,16 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
     final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
     final deadlineDay = DateTime(task.deadline!.year, task.deadline!.month, task.deadline!.day);
     final daysLeft = deadlineDay.difference(today).inDays;
-    return daysLeft >= 0 && daysLeft <= 3;
+    final yellowThreshold = task.yellowThresholdDays ?? TaskService.defaultYellowDays;
+    final result = daysLeft >= 0 && daysLeft < yellowThreshold;
+    debugPrint(
+      'isDueSoon check | title: ${task.title} | '
+      'daysLeft: $daysLeft | '
+      'isDeleted: ${!task.isActive} | '
+      'inDoneByUids: ${false} | '
+      'result: $result'
+    );
+    return result;
   }
 
   Color _getDeadlineColor(Task task) {
@@ -249,11 +258,14 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
         result = _tasks.where((t) => !t.isActive).toList();
         break;
       case 'Due Soon':
+        debugPrint('_getFilteredTasks Due Soon | activeFilter: $_activeFilter | total tasks: ${_tasks.length}');
         result = _tasks.where((t) {
+          debugPrint('  task: ${t.title} | _isDueSoon: ${_isDueSoon(t)} | deadline: ${t.deadline} | isActive: ${t.isActive} | uid: $uid | doneByUids: ${t.doneByUids}');
           if (t.deadline == null || !t.isActive) return false;
           if (uid != null && t.doneByUids.contains(uid)) return false;
           return _isDueSoon(t);
         }).toList();
+        debugPrint('  result count: ${result.length}');
         break;
       case 'Overdue':
         result = _tasks.where((t) {
@@ -428,7 +440,7 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
     final doneTasks = _getSectionTasks(allFiltered, false, true);
     final deletedTasks = _getSectionTasks(allFiltered, true, false);
 
-    final showActive = _activeFilter == 'All' && activeTasks.isNotEmpty;
+    final showActive = (_activeFilter == 'All' || _activeFilter == 'Due Soon' || _activeFilter == 'Overdue') && activeTasks.isNotEmpty;
     final showDone = doneTasks.isNotEmpty;
     final showDeleted = deletedTasks.isNotEmpty;
 
@@ -492,10 +504,10 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
       children: [
         // Filter chips row
         Container(
-          padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+          padding: const EdgeInsets.fromLTRB(16, 0, 0, 8),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.only(left: 16),
+            padding: EdgeInsets.zero,
             child: Row(
               children: _filterChips.map((chip) {
                 final isActive = _activeFilter == chip.label;
@@ -779,14 +791,15 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
       onTap: isFaculty && task.createdBy == _userId && !isDone && !isDeleted
           ? () => _openAckStatusSheet(task)
           : null,
-      onLongPress: isDone || isDeleted
+      onLongPress: isDeleted
           ? null
           : () {
               if (uid != null) {
+                final isDone = task.doneByUids.contains(uid);
                 showDialog(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    title: const Text('Mark as done?'),
+                    title: Text(isDone ? 'Unmark as done?' : 'Mark as done?'),
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
                       TextButton(
@@ -794,7 +807,7 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
                           Navigator.pop(ctx);
                           _toggleTaskDone(task);
                         },
-                        child: const Text('Mark done'),
+                        child: Text(isDone ? 'Unmark' : 'Mark done'),
                       ),
                     ],
                   ),
@@ -995,6 +1008,26 @@ class _UpdatesTasksScreenState extends State<UpdatesTasksScreen> {
                 ),
               ),
               // Actions
+              if (isDone && !isDeleted)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: () => _toggleTaskDone(task),
+                          icon: const Icon(Icons.undo, size: 16),
+                          label: const Text('Unmark as Done'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.doneGreen,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (!isDone && !isDeleted)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),

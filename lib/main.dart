@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:workmanager/workmanager.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chats_screen.dart';
 import 'package:luminescence/pages/home_hamburger/updates_tasks_screen.dart';
 import 'package:luminescence/pages/tasks/task_list_screen.dart';
@@ -11,12 +12,9 @@ import 'package:luminescence/pages/role_selection/role_selection_screen.dart';
 import 'package:luminescence/pages/verify_email/verify_email_screen.dart';
 import 'package:luminescence/themes/app_theme.dart';
 import 'package:luminescence/services/notification_service.dart';
+import 'package:luminescence/services/deadline_reminder_service.dart';
 
 /// Top-level background message handler for FCM.
-///
-/// Must be a top-level function (not a class method) because it runs in a
-/// separate isolate. The @pragma annotation is required for Dart to retain
-/// this function in the compiled output.
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
@@ -25,9 +23,38 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('Background message: ${message.messageId}');
 }
 
+/// Top-level callback for workmanager background tasks.
+///
+/// Dispatches to DeadlineReminderService based on task name.
+@pragma('vm:entry-point')
+void _workmanagerCallback() {
+  Workmanager().executeTask((taskName, inputData) async {
+    debugPrint('Workmanager executing: $taskName');
+    try {
+      await Firebase.initializeApp();
+    } catch (_) {}
+
+    if (taskName == 'deadlineReminder3h' || taskName == 'deadlineReminder1h') {
+      final taskId = inputData?['taskId'] as String?;
+      final period = inputData?['period'] as String?;
+      if (taskId != null && period != null) {
+        await DeadlineReminderService.handleReminderCallback(
+          taskId: taskId,
+          period: period,
+        );
+      }
+    }
+    return true;
+  });
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+
+  // Initialize workmanager with callback dispatcher
+  await Workmanager().initialize(_workmanagerCallback);
+
   try {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     await NotificationService.instance.initialize();

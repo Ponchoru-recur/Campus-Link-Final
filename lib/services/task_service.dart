@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:luminescence/models/task.dart';
 import 'package:luminescence/services/notification_service.dart';
+import 'package:luminescence/services/deadline_reminder_service.dart';
 
 class TaskService {
   final _auth = FirebaseAuth.instance;
@@ -76,6 +77,8 @@ class TaskService {
       'links': linkData,
       'isActive': true,
       'doneByUids': <String>[],
+      'reminderSent3h': false,
+      'reminderSent1h': false,
       if (greenThresholdDays != null) 'greenThresholdDays': int.tryParse(greenThresholdDays),
       if (yellowThresholdDays != null) 'yellowThresholdDays': int.tryParse(yellowThresholdDays),
       if (redThresholdDays != null) 'redThresholdDays': int.tryParse(redThresholdDays),
@@ -184,6 +187,22 @@ class TaskService {
       }
     }
 
+    // Schedule deadline reminders if deadline is set
+    if (deadlineDate != null) {
+      await DeadlineReminderService.scheduleReminders(
+        taskId: taskId,
+        deadline: deadlineDate,
+      );
+    } else if (deadline.isNotEmpty) {
+      final parsed = DateTime.tryParse(deadline);
+      if (parsed != null && parsed.isAfter(DateTime.now())) {
+        await DeadlineReminderService.scheduleReminders(
+          taskId: taskId,
+          deadline: parsed,
+        );
+      }
+    }
+
     return {...taskData, 'id': taskId};
   }
 
@@ -224,11 +243,27 @@ class TaskService {
     if (updates.isNotEmpty) {
       await _firestore.collection('tasks').doc(taskId).update(updates);
     }
+
+    // Re-schedule reminders if deadline changed
+    if (deadline != null && deadline.isNotEmpty) {
+      final parsed = DateTime.tryParse(deadline);
+      if (parsed != null) {
+        await DeadlineReminderService.cancelReminders(taskId);
+        if (parsed.isAfter(DateTime.now())) {
+          await DeadlineReminderService.scheduleReminders(
+            taskId: taskId,
+            deadline: parsed,
+          );
+        }
+      }
+    } else if (clearDeadline) {
+      await DeadlineReminderService.cancelReminders(taskId);
+    }
   }
 
   Future<void> deleteTask(String taskId) async {
-    // Soft delete - just mark as inactive
     await _firestore.collection('tasks').doc(taskId).update({'isActive': false});
+    await DeadlineReminderService.cancelReminders(taskId);
   }
 
   Future<void> restoreTask(String taskId) async {

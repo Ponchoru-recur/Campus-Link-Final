@@ -14,6 +14,8 @@ class Task {
   final DateTime? deadline;
   final List<TaskLink> links;
   final bool isActive; // false if faculty deleted/ignored it
+  final bool reminderSent3h; // true after 3h deadline reminder sent
+  final bool reminderSent1h; // true after 1h deadline reminder sent
   final List<String> targetUids; // UIDs of users who should see this task
   final List<String> ignoredBy; // Faculty who tapped out
   final List<String> doneByUids; // students who marked as done
@@ -34,6 +36,8 @@ class Task {
     this.deadline,
     this.links = const [],
     this.isActive = true,
+    this.reminderSent3h = false,
+    this.reminderSent1h = false,
     this.targetUids = const [],
     this.ignoredBy = const [],
     this.doneByUids = const [],
@@ -63,6 +67,8 @@ class Task {
           .map((e) => TaskLink.fromMap(e as Map<String, dynamic>))
           .toList(),
       isActive: data['isActive'] ?? true,
+      reminderSent3h: data['reminderSent3h'] ?? false,
+      reminderSent1h: data['reminderSent1h'] ?? false,
       targetUids: List<String>.from(data['targetUids'] ?? []),
       ignoredBy: List<String>.from(data['ignoredBy'] ?? []),
       doneByUids: List<String>.from(data['doneByUids'] ?? []),
@@ -87,6 +93,8 @@ class Task {
         'deadline': deadline,
         'links': links.map((l) => l.toMap()).toList(),
         'isActive': isActive,
+        'reminderSent3h': reminderSent3h,
+        'reminderSent1h': reminderSent1h,
         'targetUids': targetUids,
         'ignoredBy': ignoredBy,
         'doneByUids': doneByUids,
