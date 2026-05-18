@@ -700,7 +700,7 @@ class _SectionCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         color: AppColors.textSecondary)),
                 const Spacer(),
-                if (trailing != null) trailing!,
+                ?trailing,
               ],
             ),
           ),

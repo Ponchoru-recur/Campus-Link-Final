@@ -12,6 +12,8 @@ import 'package:luminescence/pages/home_hamburger/channel_screen/message_edit_de
 import 'package:luminescence/pages/tasks/create_task_screen.dart';
 import 'package:luminescence/widgets/task_bubble.dart';
 import 'package:luminescence/services/notification_service.dart';
+import 'package:luminescence/services/pinned_notice_service.dart';
+import 'package:luminescence/models/pinned_notice.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 final _urlRegex = RegExp(
@@ -47,10 +49,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   bool _isMarkingRead = false;
   final LayerLink _mentionLayerLink = LayerLink();
 
-  // Pinned messages
-  StreamSubscription<QuerySnapshot>? _pinnedSubscription;
-  List<Message> _pinnedMessages = [];
-  bool _pinnedBarExpanded = true;
+
+  // Pinned notices
+  StreamSubscription<QuerySnapshot>? _pinnedNoticeSubscription;
+  List<PinnedNotice> _activePinnedNotices = [];
+  final _pinnedNoticeService = PinnedNoticeService.instance;
 
   // Notification strategy
   String _notificationStrategy = 'mentionsOnly';
@@ -260,7 +263,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _setupGroupStream();
     _setupMessagesStream();
     _loadMembers();
-    _setupPinnedStream();
+    _setupPinnedNoticesStream();
     _loadNotificationStrategy();
     _scrollController.addListener(_onScroll);
   }
@@ -493,49 +496,24 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
-  void _setupPinnedStream() {
-    _pinnedSubscription = FirebaseFirestore.instance
-        .collection('group_chats')
-        .doc(widget.chat.id)
-        .collection('messages')
-        .where('pinnedUntil', isGreaterThan: Timestamp.now())
-        .snapshots()
+  void _setupPinnedNoticesStream() {
+    _pinnedNoticeSubscription = _pinnedNoticeService
+        .getActivePinsStream('group', _chatId)
         .listen((snapshot) {
       if (!mounted) return;
+      final count = snapshot.docs.length;
+      debugPrint('[PinnedNotices] Stream received $count docs for chat $_chatId');
       setState(() {
-        _pinnedMessages = snapshot.docs.map((doc) {
-          final data = doc.data();
-          final senderId = data['senderId'] ?? '';
-          final isMe = senderId == FirebaseAuth.instance.currentUser?.uid;
-          return Message(
-            id: doc.id,
-            senderId: senderId,
-            senderName: data['senderName'] ?? 'Unknown',
-            text: data['text'] ?? '',
-            timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            isMe: isMe,
-            mentionedUids: List<String>.from(data['mentionedUids'] ?? []),
-            pinnedUntil: (data['pinnedUntil'] as Timestamp?)?.toDate(),
-          );
-        }).toList();
+        _activePinnedNotices = snapshot.docs
+            .map((doc) => PinnedNotice.fromFirestore(doc))
+            .toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
       });
     }, onError: (e) {
-      debugPrint('Error in pinned stream: $e');
+      debugPrint('[PinnedNotices] Stream ERROR: $e');
     });
   }
 
-  Future<void> _unpinMessage(String messageId) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('group_chats')
-          .doc(widget.chat.id)
-          .collection('messages')
-          .doc(messageId)
-          .update({'pinnedUntil': null});
-    } catch (e) {
-      debugPrint('Error unpinning message: $e');
-    }
-  }
 
   Future<void> _markMessagesAsRead() async {
     if (_isMarkingRead) return;
@@ -1318,7 +1296,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     NotificationService.activeChatId = null;
     _messagesSubscription?.cancel();
     _groupDocSubscription?.cancel();
-    _pinnedSubscription?.cancel();
+    _pinnedNoticeSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _searchController.dispose();
@@ -1428,7 +1406,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         return ListView.separated(
           controller: scrollController,
           itemCount: docs.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
+          separatorBuilder: (_, _) => const Divider(height: 1),
           itemBuilder: (context, index) {
             final data = docs[index].data() as Map<String, dynamic>;
             final senderName = data['senderName'] ?? 'Unknown';
@@ -1476,7 +1454,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-  void _showAuditSheet() {
+  void _showPinnedNoticesSheet({int initialTab = 0}) {
     final db = FirebaseFirestore.instance;
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     showModalBottomSheet(
@@ -1487,7 +1465,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
       builder: (ctx) {
         return DefaultTabController(
-          length: 2,
+          length: 3,
+          initialIndex: initialTab,
           child: DraggableScrollableSheet(
             initialChildSize: 0.5,
             minChildSize: 0.3,
@@ -1500,10 +1479,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.history, size: 20, color: AppColors.primary),
+                        Icon(
+                          initialTab == 0 ? Icons.push_pin : Icons.history,
+                          size: 20,
+                          color: AppColors.primary,
+                        ),
                         const SizedBox(width: 8),
                         const Text(
-                          'Mentions & @everyone',
+                          'Pinned Notices & Mentions',
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const Spacer(),
@@ -1519,6 +1502,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       unselectedLabelColor: AppColors.textSecondary,
                       indicatorColor: AppColors.primary,
                       tabs: [
+                        Tab(text: 'Pinned'),
                         Tab(text: '@everyone'),
                         Tab(text: '@you'),
                       ],
@@ -1527,6 +1511,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     Expanded(
                       child: TabBarView(
                         children: [
+                          // Pinned tab
+                          _buildPinnedTab(scrollController),
                           // @everyone tab
                           _buildAuditList(
                             db
@@ -1560,6 +1546,109 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPinnedTab(ScrollController scrollController) {
+    final hasReachedMax = _activePinnedNotices.length >= 5;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // FAB row — faculty only, hidden at max
+        if (_isFaculty && !hasReachedMax)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
+              child: FloatingActionButton.small(
+                heroTag: 'pinned_fab',
+                onPressed: () => _showCreateEditPinnedNotice(notice: null),
+                backgroundColor: AppColors.primary,
+                child: const Icon(Icons.add, color: Colors.white),
+              ),
+            ),
+          ),
+
+        // Limit message — faculty only, shown at max
+        if (_isFaculty && hasReachedMax)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Maximum of 5 pinned notices reached. Unpin one to add more.',
+                style: TextStyle(fontSize: 12, color: Colors.amber[800]),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+
+        // Cards list or empty state
+        Expanded(
+          child: _activePinnedNotices.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.push_pin_outlined, size: 48, color: Colors.grey[300]),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No pinned notices yet',
+                        style: TextStyle(fontSize: 16, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                      ),
+                      if (_isFaculty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tap + to add one',
+                          style: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                        ),
+                      ],
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: _activePinnedNotices.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final notice = _activePinnedNotices[index];
+                    return _PinnedNoticeCard(
+                      notice: notice,
+                      isFaculty: _isFaculty,
+                      isFirst: index == 0,
+                      isLast: index == _activePinnedNotices.length - 1,
+                      chatId: _chatId,
+                      collectionType: 'group',
+                      onChanged: () {
+                        // Refresh happens via stream
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  void _showCreateEditPinnedNotice({PinnedNotice? notice}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _CreateEditPinnedNoticeSheet(
+        notice: notice,
+        chatId: _chatId,
+        chatName: _groupName,
+        collectionType: 'group',
+      ),
     );
   }
 
@@ -1615,22 +1704,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
       body: Column(
         children: [
-          // ── Pinned Bar ──
-          if (_pinnedMessages.isNotEmpty)
-            _PinnedBar(
-              pinnedMessages: _pinnedMessages,
-              isExpanded: _pinnedBarExpanded,
-              onToggle: () {
-                setState(() {
-                  _pinnedBarExpanded = !_pinnedBarExpanded;
-                });
-              },
-              onUnpin: _unpinMessage,
-              formatTime: _formatTime,
-              onShowHistory: _showAuditSheet,
-            )
-          else
-            _EveryoneHistoryButton(onShowHistory: _showAuditSheet),
+          // ── Pinned Notice & @everyone Slim Bar ──
+          _PinnedNoticeBar(
+            activePins: _activePinnedNotices,
+            onShowSheet: _showPinnedNoticesSheet,
+          ),
           // ── Messages List ──
           Expanded(
             child: ListView.builder(
@@ -2009,158 +2087,76 @@ class _MessageBubble extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-// Pinned Bar
+// Pinned Notice Slim Bar (toggles between Pinned and @everyone)
 // ─────────────────────────────────────────────
-class _PinnedBar extends StatelessWidget {
-  final List<Message> pinnedMessages;
-  final bool isExpanded;
-  final VoidCallback onToggle;
-  final Future<void> Function(String) onUnpin;
-  final String Function(DateTime) formatTime;
-  final VoidCallback onShowHistory;
+class _PinnedNoticeBar extends StatelessWidget {
+  final List<PinnedNotice> activePins;
+  final void Function({int initialTab}) onShowSheet;
 
-  const _PinnedBar({
-    required this.pinnedMessages,
-    required this.isExpanded,
-    required this.onToggle,
-    required this.onUnpin,
-    required this.formatTime,
-    required this.onShowHistory,
+  const _PinnedNoticeBar({
+    required this.activePins,
+    required this.onShowSheet,
   });
 
-  String _formatAge(DateTime timestamp) {
-    final diff = DateTime.now().difference(timestamp);
-    if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
-    } else if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
-    } else {
-      return 'yesterday';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (pinnedMessages.isEmpty) return const SizedBox.shrink();
+    final showPinned = activePins.isNotEmpty;
 
-    final mostRecent = pinnedMessages.last; // last = most recent in ascending order
-    final age = DateTime.now().difference(mostRecent.timestamp);
-    Color bgColor;
-    if (age.inHours < 1) {
-      bgColor = Colors.amber.withValues(alpha: 0.2);
-    } else if (age.inHours < 24) {
-      bgColor = Colors.amber.withValues(alpha: 0.1);
-    } else {
-      bgColor = Colors.grey[100]!;
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        border: const Border(bottom: BorderSide(color: AppColors.divider)),
-      ),
-      child: InkWell(
-        onTap: onShowHistory,
-        onLongPress: onToggle,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            children: [
-              Icon(
-                Icons.push_pin,
-                size: 16,
-                color: age.inHours < 1 ? Colors.amber[700] : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          mostRecent.senderName,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          _formatAge(mostRecent.timestamp),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      mostRecent.text,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: age.inHours < 1 ? AppColors.textPrimary : AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.history, size: 18, color: AppColors.primary),
-                tooltip: '@everyone history',
-                onPressed: onShowHistory,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                splashRadius: 16,
-              ),
-              IconButton(
-                icon: Icon(Icons.close, size: 16, color: Colors.grey[600]),
-                onPressed: () => onUnpin(mostRecent.id),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                splashRadius: 16,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// @everyone History Button (when no pinned message)
-// ─────────────────────────────────────────────
-class _EveryoneHistoryButton extends StatelessWidget {
-  final VoidCallback onShowHistory;
-  const _EveryoneHistoryButton({required this.onShowHistory});
-
-  @override
-  Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       child: InkWell(
-        onTap: onShowHistory,
+        onTap: () => onShowSheet(initialTab: showPinned ? 0 : 1),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              const Icon(Icons.history, size: 16, color: AppColors.primary),
-              const SizedBox(width: 8),
-              const Text(
+              if (showPinned) ...[
+                const Icon(Icons.push_pin, size: 16, color: AppColors.primary),
+                const SizedBox(width: 6),
+                const Text(
+                  'Pinned',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  width: 1,
+                  height: 16,
+                  color: AppColors.divider,
+                ),
+              ],
+              Icon(Icons.history, size: 16, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text(
                 '@everyone history',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.primary,
+                  color: showPinned ? AppColors.textSecondary : AppColors.primary,
                 ),
               ),
+              if (showPinned && activePins.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(left: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${activePins.length}',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
               const Spacer(),
               Icon(Icons.chevron_right, size: 16, color: Colors.grey[400]),
             ],
@@ -2373,6 +2369,382 @@ class _MessageInputBarState extends State<_MessageInputBar> {
                 ),
                 child: const Icon(Icons.send, color: Colors.white, size: 20),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Pinned Notice Card
+// ─────────────────────────────────────────────
+class _PinnedNoticeCard extends StatelessWidget {
+  final PinnedNotice notice;
+  final bool isFaculty;
+  final bool isFirst;
+  final bool isLast;
+  final String chatId;
+  final String collectionType;
+  final VoidCallback onChanged;
+
+  const _PinnedNoticeCard({
+    required this.notice,
+    required this.isFaculty,
+    required this.isFirst,
+    required this.isLast,
+    required this.chatId,
+    required this.collectionType,
+    required this.onChanged,
+  });
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.month}/${dt.day}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.push_pin, size: 16, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  notice.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (isFaculty)
+                PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textSecondary),
+                  onSelected: (value) async {
+                    switch (value) {
+                      case 'edit':
+                        _showEditSheet(context);
+                      case 'unpin':
+                        await PinnedNoticeService.instance.archive(
+                          collectionType: collectionType,
+                          chatId: chatId,
+                          noticeId: notice.id,
+                        );
+                      case 'up':
+                        await PinnedNoticeService.instance.moveUp(
+                          collectionType: collectionType,
+                          chatId: chatId,
+                          noticeId: notice.id,
+                          currentOrder: notice.order,
+                        );
+                      case 'down':
+                        await PinnedNoticeService.instance.moveDown(
+                          collectionType: collectionType,
+                          chatId: chatId,
+                          noticeId: notice.id,
+                          currentOrder: notice.order,
+                        );
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    const PopupMenuItem(value: 'unpin', child: Text('Unpin')),
+                    PopupMenuItem(
+                      value: 'up',
+                      enabled: !isFirst,
+                      child: const Text('Move up'),
+                    ),
+                    PopupMenuItem(
+                      value: 'down',
+                      enabled: !isLast,
+                      child: const Text('Move down'),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            notice.description,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          if (notice.link != null && notice.link!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () async {
+                final uri = Uri.tryParse(notice.link!);
+                if (uri != null && await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.link, size: 14, color: AppColors.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      notice.link!.replaceAll(RegExp(r'^https?://'), ''),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primary,
+                        decoration: TextDecoration.underline,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                'Posted by ${notice.createdByName} · ${_timeAgo(notice.createdAt)}',
+                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+              ),
+              if (notice.editedAt != null) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '· edited',
+                  style: TextStyle(fontSize: 10, color: Colors.grey[400], fontStyle: FontStyle.italic),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _CreateEditPinnedNoticeSheet(
+        notice: notice,
+        chatId: chatId,
+        chatName: '',
+        collectionType: collectionType,
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Create / Edit Pinned Notice Form
+// ─────────────────────────────────────────────
+class _CreateEditPinnedNoticeSheet extends StatefulWidget {
+  final PinnedNotice? notice;
+  final String chatId;
+  final String chatName;
+  final String collectionType;
+
+  const _CreateEditPinnedNoticeSheet({
+    this.notice,
+    required this.chatId,
+    required this.chatName,
+    required this.collectionType,
+  });
+
+  @override
+  State<_CreateEditPinnedNoticeSheet> createState() => _CreateEditPinnedNoticeSheetState();
+}
+
+class _CreateEditPinnedNoticeSheetState extends State<_CreateEditPinnedNoticeSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _linkController;
+  bool _isSubmitting = false;
+  final _service = PinnedNoticeService.instance;
+
+  bool get _isEditing => widget.notice != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.notice?.title ?? '');
+    _descriptionController = TextEditingController(text: widget.notice?.description ?? '');
+    _linkController = TextEditingController(text: widget.notice?.link ?? '');
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _linkController.dispose();
+    super.dispose();
+  }
+
+  String? _validateUrl(String? value) {
+    if (value == null || value.isEmpty) return null;
+    final uri = Uri.tryParse(value);
+    if (uri == null || !uri.hasScheme || (!uri.isScheme('http') && !uri.isScheme('https'))) {
+      return 'Enter a valid URL (http:// or https://)';
+    }
+    return null;
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      if (_isEditing) {
+        await _service.update(
+          collectionType: widget.collectionType,
+          chatId: widget.chatId,
+          noticeId: widget.notice!.id,
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          link: _linkController.text.trim().isEmpty ? null : _linkController.text.trim(),
+        );
+      } else {
+        await _service.create(
+          collectionType: widget.collectionType,
+          chatId: widget.chatId,
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          link: _linkController.text.trim().isEmpty ? null : _linkController.text.trim(),
+          chatName: widget.chatName,
+        );
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${_isEditing ? 'Update' : 'Create'} failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _isEditing ? 'Edit Pinned Notice' : 'New Pinned Notice',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _titleController,
+              maxLength: 100,
+              decoration: const InputDecoration(
+                labelText: 'Title *',
+                border: OutlineInputBorder(),
+                counterText: '',
+              ),
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Title is required' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _descriptionController,
+              maxLength: 500,
+              maxLines: 3,
+              minLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Description *',
+                border: OutlineInputBorder(),
+                alignLabelWithHint: true,
+              ),
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Description is required' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _linkController,
+              decoration: const InputDecoration(
+                labelText: 'Link (optional)',
+                hintText: 'https://',
+                border: OutlineInputBorder(),
+              ),
+              validator: _validateUrl,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _isSubmitting ? null : () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: _isSubmitting ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(_isEditing ? 'Save' : 'Post'),
+                ),
+              ],
             ),
           ],
         ),

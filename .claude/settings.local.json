@@ -69,7 +69,10 @@
       "WebSearch",
       "Bash(git commit *)",
       "Bash(echo \"EXIT:$?\")",
-      "Skill(context-mode)"
+      "Skill(context-mode)",
+      "Bash(Select-Object -First 10)",
+      "mcp__plugin_context-mode_context-mode__ctx_stats",
+      "Bash(Select-Object -First 1)"
     ]
   }
 }
