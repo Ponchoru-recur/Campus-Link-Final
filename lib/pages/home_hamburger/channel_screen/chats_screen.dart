@@ -12,6 +12,7 @@ import 'package:luminescence/pages/home_hamburger/settings_screen/settings_scree
 import 'package:luminescence/pages/home_hamburger/updates_tasks_screen.dart';
 import 'package:luminescence/pages/tasks/create_task_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_item.dart';
+import 'package:luminescence/pages/today/today_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_tile.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/individual_chat_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chats_refresh.dart';
@@ -30,7 +31,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
   bool _isCreatingGroup = false;
   StreamSubscription<QuerySnapshot>? _groupChatsSubscription;
   StreamSubscription<QuerySnapshot>? _directMessagesSubscription;
+  StreamSubscription<DocumentSnapshot>? _userDocSubscription;
   String _userRole = 'student';
+  bool _isRevoked = false;
   bool _isDisposed = false;
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
@@ -61,7 +64,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     _loadUnreadState();
     _setupGroupChatsStream();
     _setupDirectMessagesStream();
-    _fetchUserRole();
+    _setupUserStream();
     _fetchAndCacheUsers();
     _searchController.addListener(() {
       _filterSearch(_searchController.text);
@@ -98,30 +101,25 @@ class _ChatsScreenState extends State<ChatsScreen> {
         _prefsKey('dm_unread'), _locallyUnreadDMIds.toList());
   }
 
-  void _fetchUserRole() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || _isDisposed) return;
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      if (_isDisposed) return;
-      final role = doc.exists ? (doc['role'] ?? 'student') : 'student';
-      if (mounted && !_isDisposed) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !_isDisposed) {
-            setState(() {
-              _userRole = role;
-            });
-          }
+  void _setupUserStream() {
+    final uid = _userId;
+    if (uid == null || _isDisposed) return;
+    _userDocSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted || _isDisposed) return;
+      final data = snapshot.data();
+      if (data != null) {
+        setState(() {
+          _userRole = data['role'] ?? 'student';
+          _isRevoked = data['isRevoked'] ?? false;
         });
       }
-    } catch (e) {
-      if (!_isDisposed) {
-        debugPrint('Error fetching user role: $e');
-      }
-    }
+    }, onError: (e) {
+      if (!_isDisposed) debugPrint('Error streaming user doc: $e');
+    });
   }
 
   Future<void> _fetchAndCacheUsers() async {
@@ -289,6 +287,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     _isDisposed = true;
     _groupChatsSubscription?.cancel();
     _directMessagesSubscription?.cancel();
+    _userDocSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -431,6 +430,24 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   void _onCreateGroupChat() {
+    if (_isRevoked) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Account Restricted'),
+          content: const Text(
+            'Your account has been restricted. You cannot create new groups.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final controller = TextEditingController();
     showDialog(
       context: context,
@@ -628,6 +645,26 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
+  Widget _buildRevokedBanner() {
+    return Container(
+      width: double.infinity,
+      color: Colors.amber[700],
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: const Row(
+        children: [
+          Icon(Icons.warning_amber, color: Colors.white, size: 16),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Your account has been restricted. Contact your administrator for assistance.',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ─────────────────────────────────────
   // Drawer
   // ─────────────────────────────────────
@@ -643,30 +680,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: Colors.white.withOpacity(0.3),
-                      backgroundImage: const AssetImage(
-                          'assets/images/avatar.png'),
-                      onBackgroundImageError: (_, _) {},
-                      child: const Icon(Icons.person,
-                          color: Colors.white, size: 28),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.question_mark,
-                          color: Colors.white, size: 18),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 10),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -726,6 +739,19 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   onTap: () {
                     Navigator.pop(context);
                     // TODO: navigate to Profile screen
+                  },
+                ),
+                _DrawerItem(
+                  icon: Icons.today,
+                  label: 'Today',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TodayScreen(),
+                      ),
+                    );
                   },
                 ),
                 _DrawerItem(
@@ -874,7 +900,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
         ],
       ),
       drawer: _buildDrawer(),
-      body: RefreshIndicator(
+      body: Column(
+        children: [
+          if (_userRole == 'faculty' && _isRevoked) _buildRevokedBanner(),
+          Expanded(
+            child: RefreshIndicator(
         onRefresh: _refreshData,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -1036,7 +1066,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
           ],
         ),
       ),
-    );
+    ),
+      ],
+    ),
+  );
   }
 
   String _generateDmDocId(String uid1, String uid2) {

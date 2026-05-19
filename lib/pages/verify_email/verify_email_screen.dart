@@ -115,15 +115,25 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
             'role': _role,
             'createdAt': FieldValue.serverTimestamp(),
             'emailVerified': true,
+            'isApproved': _role == 'student' ? true : false,
+            'isRevoked': false,
           });
 
       await _prefs!.remove('pending_email');
       await _prefs!.remove('pending_role');
 
       if (mounted) {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil('/chatScreen', (route) => false);
+        if (_role == 'faculty') {
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/pendingApproval',
+            (route) => false,
+          );
+        } else {
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/today',
+            (route) => false,
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

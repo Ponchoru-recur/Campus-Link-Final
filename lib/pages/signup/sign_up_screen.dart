@@ -97,13 +97,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
           );
         }
       } on FirebaseAuthException catch (e) {
-        String message = 'Sign up failed';
-        if (e.code == 'weak-password') {
-          message = 'Password is too weak';
-        } else if (e.code == 'email-already-in-use') {
-          message = 'An account already exists for this email';
-        } else if (e.code == 'invalid-email') {
-          message = 'Invalid email format';
+        String message;
+        switch (e.code) {
+          case 'email-already-in-use':
+            message = 'An account with this email already exists. '
+                'Please log in instead.';
+          case 'invalid-email':
+            message = 'Please enter a valid CARSU email address.';
+          case 'weak-password':
+            message = 'Password is too weak. '
+                'Please use at least 6 characters.';
+          default:
+            message = 'Registration failed. Please try again.';
         }
         if (mounted) {
           ScaffoldMessenger.of(

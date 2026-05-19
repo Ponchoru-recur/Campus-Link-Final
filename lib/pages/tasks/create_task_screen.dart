@@ -35,6 +35,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
   final _taskService = TaskService();
   String _userRole = 'student';
+  bool _isRevoked = false;
   String? _userId;
   List<Map<String, dynamic>> _availableGroups = [];
   final Set<String> _selectedGroupIds = {};
@@ -53,6 +54,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       if (userDoc.exists) {
         _userRole = userDoc.data()?['role'] ?? 'student';
+        _isRevoked = userDoc.data()?['isRevoked'] ?? false;
       }
       if (widget.prefilledChatId == null && _userRole == 'faculty') {
         final snapshot = await FirebaseFirestore.instance
@@ -208,6 +210,26 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   }
 
   Future<void> _submit() async {
+    if (_isRevoked) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Account Restricted'),
+            content: const Text(
+              'Your account has been restricted. You cannot create new tasks.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     if (_deadline == null) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -48,6 +48,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   StreamSubscription<DocumentSnapshot>? _groupDocSubscription;
   bool _isMarkingRead = false;
   final LayerLink _mentionLayerLink = LayerLink();
+  String? _createdBy;
+  bool _isCurrentUserRevoked = false;
+  StreamSubscription<DocumentSnapshot>? _userDocSubscription;
 
 
   // Pinned notices
@@ -265,6 +268,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _loadMembers();
     _setupPinnedNoticesStream();
     _loadNotificationStrategy();
+    _setupUserStream();
     _scrollController.addListener(_onScroll);
   }
 
@@ -313,11 +317,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           .get()
           .timeout(const Duration(seconds: 10));
       if (!mounted) return;
-      final isCreator = groupDoc.data()?['createdBy'] == user.uid;
+      final creator = groupDoc.data()?['createdBy'];
+      final isCreator = creator == user.uid;
       final isFaculty = userDoc.data()?['role'] == 'faculty';
       setState(() {
         _isAdmin = isCreator || isFaculty;
         _isFaculty = isFaculty;
+        _createdBy = creator;
       });
     } catch (e) {
       debugPrint('Error checking admin status: $e');
@@ -356,10 +362,31 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       if (data != null) {
         setState(() {
           _groupName = data['name'] ?? widget.chat.name;
+          _createdBy = data['createdBy'];
         });
       }
     }, onError: (e) {
       debugPrint('Error in group stream: $e');
+    });
+  }
+
+  void _setupUserStream() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    _userDocSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      final data = snapshot.data();
+      if (data != null) {
+        setState(() {
+          _isCurrentUserRevoked = data['isRevoked'] ?? false;
+        });
+      }
+    }, onError: (e) {
+      debugPrint('Error streaming user doc: $e');
     });
   }
 
@@ -1297,6 +1324,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _messagesSubscription?.cancel();
     _groupDocSubscription?.cancel();
     _pinnedNoticeSubscription?.cancel();
+    _userDocSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _searchController.dispose();
@@ -1753,6 +1781,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             uidToName: _uidToName,
             layerLink: _mentionLayerLink,
             currentUserUid: FirebaseAuth.instance.currentUser?.uid ?? '',
+            isRevokedAndCreator: _isCurrentUserRevoked && _createdBy == FirebaseAuth.instance.currentUser?.uid,
           ),
         ],
       ),
@@ -2178,6 +2207,7 @@ class _MessageInputBar extends StatefulWidget {
   final Map<String, String> uidToName;
   final LayerLink layerLink;
   final String currentUserUid;
+  final bool isRevokedAndCreator;
 
   const _MessageInputBar({
     required this.controller,
@@ -2187,6 +2217,7 @@ class _MessageInputBar extends StatefulWidget {
     required this.uidToName,
     required this.layerLink,
     required this.currentUserUid,
+    this.isRevokedAndCreator = false,
   });
 
   @override
@@ -2305,6 +2336,29 @@ class _MessageInputBarState extends State<_MessageInputBar> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isRevokedAndCreator) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF0F0F0),
+          border: Border(top: BorderSide(color: AppColors.divider)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.lock, size: 16, color: AppColors.textSecondary),
+            SizedBox(width: 8),
+            Text(
+              'Your account is restricted.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(

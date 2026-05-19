@@ -1,7 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:luminescence/pages/signup/sign_up_screen.dart';
 import 'package:luminescence/pages/reset_password/reset_password_screen.dart';
+import 'package:luminescence/pages/today/today_screen.dart';
+import 'package:luminescence/pages/auth/pending_approval_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -73,26 +76,89 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = true);
 
       try {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
+        final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
 
+        if (!mounted) return;
+
+        // Read user document from Firestore
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(credential.user!.uid)
+            .get();
+
+        if (!userDoc.exists) {
+          // New user — navigate normally (verify email flow handles it)
+          if (mounted) {
+            Navigator.of(
+              context,
+            ).pushNamedAndRemoveUntil('/chatScreen', (route) => false);
+          }
+          return;
+        }
+
+        final storedRole = userDoc.data()?['role'] ?? 'student';
+        final isApproved = userDoc.data()?['isApproved'] ?? false;
+
+        // CHECK 1 — Role mismatch
+        if (storedRole != _role) {
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => AlertDialog(
+                title: const Text('Wrong Role Selected'),
+                content: Text(
+                  'This account is registered as a $storedRole. '
+                  'Please go back and select the correct role to log in.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context)
+                        .popUntil((route) => route.isFirst),
+                    child: const Text('Go Back'),
+                  ),
+                ],
+              ),
+            );
+          }
+          return;
+        }
+
+        // CHECK 2 — Faculty pending approval
+        if (storedRole == 'faculty' && !isApproved) {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const PendingApprovalScreen(),
+              ),
+            );
+          }
+          return;
+        }
+
+        // CHECK 3 — All good, proceed to app
         if (mounted) {
-          Navigator.of(
+          Navigator.pushReplacement(
             context,
-          ).pushNamedAndRemoveUntil('/chatScreen', (route) => false);
+            MaterialPageRoute(builder: (_) => const TodayScreen()),
+          );
         }
       } on FirebaseAuthException catch (e) {
-        String message = 'Login failed';
-        if (e.code == 'user-not-found') {
-          message = 'No account found for this email';
-        } else if (e.code == 'wrong-password') {
-          message = 'Incorrect password';
-        } else if (e.code == 'invalid-email') {
-          message = 'Invalid email format';
-        } else if (e.code == 'invalid-credential') {
-          message = 'Invalid email or password';
+        String message;
+        switch (e.code) {
+          case 'user-not-found':
+          case 'wrong-password':
+          case 'invalid-credential':
+            message = 'Incorrect email or password. Please try again.';
+          case 'invalid-email':
+            message = 'Please enter a valid CARSU email address.';
+          default:
+            message = 'Login failed. Please try again.';
         }
         if (mounted) {
           ScaffoldMessenger.of(
