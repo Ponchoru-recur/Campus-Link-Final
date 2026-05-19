@@ -44,6 +44,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   final Set<String> _markedAsRead = {};
   List<Map<String, dynamic>> _firestoreMembers = [];
   Map<String, String> _uidToName = {};
+  final Set<String> _facultyUids = {};
   StreamSubscription<QuerySnapshot>? _messagesSubscription;
   StreamSubscription<DocumentSnapshot>? _groupDocSubscription;
   bool _isMarkingRead = false;
@@ -473,10 +474,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       );
       if (!mounted) return;
       setState(() {
+        _facultyUids.clear();
         _firestoreMembers = userDocs.map((doc) {
           final data = doc.data();
           final isCreator = doc.id == groupData['createdBy'];
           final isFaculty = data?['role'] == 'faculty';
+          if (isFaculty) _facultyUids.add(doc.id);
           return {
             'uid': doc.id,
             'name': data?['email']?.split('@').first.replaceAll('.', ' ').split(' ').map((p) => p.isEmpty ? p : p[0].toUpperCase() + p.substring(1)).join(' ') ?? 'Unknown',
@@ -1749,6 +1752,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   message: msg,
                   formatTime: _formatTime,
                   uidToName: _uidToName,
+                  facultyUids: _facultyUids,
                   onLongPress: msg.isMe && !msg.isDeleted
                       ? () async {
                           final action = await showMessageActions(
@@ -1796,6 +1800,7 @@ class _MessageBubble extends StatelessWidget {
   final Message message;
   final String Function(DateTime) formatTime;
   final Map<String, String> uidToName;
+  final Set<String> facultyUids;
   final VoidCallback? onTapEdited;
   final VoidCallback? onLongPress;
 
@@ -1803,6 +1808,7 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.formatTime,
     this.uidToName = const {},
+    this.facultyUids = const {},
     this.onTapEdited,
     this.onLongPress,
   });
@@ -2027,6 +2033,28 @@ class _MessageBubble extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                          if (facultyUids.contains(message.senderId))
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppColors.instructorPurple.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.school, size: 10, color: AppColors.instructorPurple),
+                                    SizedBox(width: 2),
+                                    Text(
+                                      'Faculty',
+                                      style: TextStyle(fontSize: 9, color: AppColors.instructorPurple, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           if (!isMentioned && message.mentionedUids.isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(left: 4),
