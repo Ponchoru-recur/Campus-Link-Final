@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -22,7 +23,7 @@ import 'package:luminescence/services/user_provider_widget.dart';
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp().timeout(const Duration(seconds: 10));
   } catch (_) {}
   debugPrint('Background message: ${message.messageId}');
 }
@@ -35,7 +36,7 @@ void _workmanagerCallback() {
   Workmanager().executeTask((taskName, inputData) async {
     debugPrint('Workmanager executing: $taskName');
     try {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp().timeout(const Duration(seconds: 10));
     } catch (_) {}
 
     if (taskName == 'deadlineReminder3h' || taskName == 'deadlineReminder1h') {
@@ -54,14 +55,25 @@ void _workmanagerCallback() {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp().timeout(const Duration(seconds: 15));
+  } catch (e) {
+    debugPrint('Firebase init timeout/failure (non-fatal): $e');
+  }
+
+  // Enable Firestore offline persistence — cached data when offline
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+  );
 
   // Initialize workmanager with callback dispatcher
   await Workmanager().initialize(_workmanagerCallback);
 
   try {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    await NotificationService.instance.initialize();
+    await NotificationService.instance.initialize()
+        .timeout(const Duration(seconds: 10));
   } catch (e) {
     debugPrint('FCM init skipped (emulator/unsupported device): $e');
   }
@@ -93,6 +105,7 @@ class MyApp extends StatelessWidget {
       theme: lightMode,
       darkTheme: darkMode,
       themeMode: ThemeMode.light,
+      debugShowCheckedModeBanner: false,
       home: const AuthWrapper(),
       routes: {
         '/roleSelection': (context) => const RoleSelectionScreen(),

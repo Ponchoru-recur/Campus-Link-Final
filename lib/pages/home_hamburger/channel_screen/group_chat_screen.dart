@@ -15,6 +15,7 @@ import 'package:luminescence/services/notification_service.dart';
 import 'package:luminescence/services/pinned_notice_service.dart';
 import 'package:luminescence/models/pinned_notice.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:luminescence/pages/home_hamburger/profile/faculty_profile_view_screen.dart';
 
 final _urlRegex = RegExp(
   r'(https?://[^\s<]+)',
@@ -485,6 +486,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             'name': data?['email']?.split('@').first.replaceAll('.', ' ').split(' ').map((p) => p.isEmpty ? p : p[0].toUpperCase() + p.substring(1)).join(' ') ?? 'Unknown',
             'email': data?['email'] ?? '',
             'role': (isCreator || isFaculty) ? 'Admin' : 'Member',
+            'actualRole': data?['role'] ?? 'student',
           };
         }).toList();
         _uidToName = {
@@ -788,6 +790,19 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       final isCurrentUser = uid == FirebaseAuth.instance.currentUser?.uid;
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
+                        onTap: !_isSelectionMode && member['actualRole'] == 'faculty'
+                            ? () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => FacultyProfileViewScreen(
+                                      facultyUid: uid,
+                                      facultyName: member['name'] as String,
+                                    ),
+                                  ),
+                                );
+                              }
+                            : null,
                         leading: GestureDetector(
                           onTap: _isSelectionMode && !isCurrentUser
                               ? () {

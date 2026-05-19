@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:luminescence/services/notification_service.dart';
 import 'package:luminescence/services/pinned_notice_service.dart';
 import 'package:luminescence/models/pinned_notice.dart';
+import 'package:luminescence/pages/home_hamburger/profile/faculty_profile_view_screen.dart';
 
 final _urlRegex = RegExp(
   r'(https?://[^\s<]+)',
@@ -502,7 +503,6 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
                       indicatorColor: AppColors.primary,
                       tabs: [
                         Tab(text: 'Pinned'),
-                        Tab(text: '@everyone'),
                         Tab(text: '@you'),
                       ],
                     ),
@@ -511,12 +511,6 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
                       child: TabBarView(
                         children: [
                           _buildDMPinnedTab(scrollController),
-                          Center(
-                            child: Text(
-                              'No @everyone calls yet',
-                              style: TextStyle(color: Colors.grey[500]),
-                            ),
-                          ),
                           Center(
                             child: Text(
                               'No one mentioned you recently',
@@ -685,6 +679,24 @@ class _IndividualChatScreenState extends State<IndividualChatScreen> {
             ),
           ],
         ),
+        actions: isFaculty
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.info_outline),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FacultyProfileViewScreen(
+                          facultyUid: _otherParticipantUid,
+                          facultyName: _otherParticipantName,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ]
+            : null,
       ),
       body: Column(
         children: [
@@ -1046,62 +1058,44 @@ class _DMPinnedNoticeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showPinned = activePins.isNotEmpty;
+    if (activePins.isEmpty) return const SizedBox.shrink();
 
     return Container(
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       child: InkWell(
-        onTap: () => onShowSheet(initialTab: showPinned ? 0 : 1),
+        onTap: () => onShowSheet(initialTab: 0),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              if (showPinned) ...[
-                const Icon(Icons.push_pin, size: 16, color: AppColors.primary),
-                const SizedBox(width: 6),
-                const Text(
-                  'Pinned',
-                  style: TextStyle(
-                    fontSize: 12,
+              const Icon(Icons.push_pin, size: 16, color: AppColors.primary),
+              const SizedBox(width: 6),
+              const Text(
+                'Pinned',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${activePins.length}',
+                  style: const TextStyle(
+                    fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: AppColors.primary,
                   ),
                 ),
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  width: 1, height: 16,
-                  color: AppColors.divider,
-                ),
-              ],
-              const Icon(Icons.history, size: 16, color: AppColors.primary),
-              const SizedBox(width: 6),
-              Text(
-                '@everyone history',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: showPinned ? AppColors.textSecondary : AppColors.primary,
-                ),
               ),
-              if (showPinned)
-                Container(
-                  margin: const EdgeInsets.only(left: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${activePins.length}',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
               const Spacer(),
               Icon(Icons.chevron_right, size: 16, color: Colors.grey[400]),
             ],
