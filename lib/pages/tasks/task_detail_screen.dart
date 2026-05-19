@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:luminescence/services/task_service.dart';
 import 'package:luminescence/themes/app_colors.dart';
@@ -44,14 +45,18 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     }
   }
 
-  String _formatDeadline(String? deadlineStr) {
-    if (deadlineStr == null) return 'No deadline';
-    try {
-      final dt = DateTime.parse(deadlineStr);
-      return DateFormat('EEEE, MMMM d, y').format(dt);
-    } catch (_) {
-      return deadlineStr;
+  String _formatDeadline(dynamic deadlineField) {
+    if (deadlineField == null) return 'No deadline';
+    DateTime? dt;
+    if (deadlineField is Timestamp) {
+      dt = deadlineField.toDate();
+    } else if (deadlineField is String) {
+      dt = DateTime.tryParse(deadlineField);
     }
+    if (dt != null) {
+      return DateFormat('EEEE, MMMM d, y').format(dt);
+    }
+    return deadlineField.toString();
   }
 
   @override
@@ -133,7 +138,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     final links =
         (task['links'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
     final deadline = task['deadline'] != null
-        ? DateTime.parse(task['deadline'])
+        ? (task['deadline'] is Timestamp
+            ? (task['deadline'] as Timestamp).toDate()
+            : DateTime.tryParse(task['deadline'] as String))
         : null;
     final isOverdue = deadline != null && (() {
       final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
