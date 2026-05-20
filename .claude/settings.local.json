@@ -74,7 +74,9 @@
       "mcp__plugin_context-mode_context-mode__ctx_stats",
       "Bash(Select-Object -First 1)",
       "Bash(cd C:\\\\Users\\\\Sam\\\\Desktop\\\\Knowledge Folder\\\\Flutter Shenanigans\\\\Final\\\\luminescence *)",
-      "PowerShell(Get-Command *)"
+      "PowerShell(Get-Command *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(dart analyze *)"
     ]
   }
 }

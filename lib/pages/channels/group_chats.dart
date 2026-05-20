@@ -12,7 +12,7 @@ class ChanncelScreen extends StatefulWidget {
 }
 
 class _ChanncelScreenState extends State<ChanncelScreen> {
-  final ChatService _chatService = ChatService();
+  final ChatService _chatService = ChatServer();
   final AuthService _authService = AuthService();
 
   @override
