@@ -113,6 +113,7 @@ class MyApp extends StatelessWidget {
         '/chatScreen': (context) => const ChatsScreen(),
         '/updatesTasks': (context) => const UpdatesTasksScreen(),
         '/tasks': (context) => const TaskListScreen(),
+        '/today': (context) => const TodayScreen(),
         '/pendingApproval': (context) => const PendingApprovalScreen(),
       },
     ),
