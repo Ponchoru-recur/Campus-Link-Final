@@ -16,7 +16,6 @@ import 'package:luminescence/pages/today/today_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/direct_message_tile.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/individual_chat_screen.dart';
 import 'package:luminescence/pages/home_hamburger/channel_screen/chats_refresh.dart';
-import 'package:luminescence/pages/home_hamburger/profile/faculty_profile_screen.dart';
 
 /// The main Chats / Channels screen shown after login.
 class ChatsScreen extends StatefulWidget {
@@ -734,20 +733,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                if (_userRole == 'faculty')
-                  _DrawerItem(
-                    icon: Icons.person_outline,
-                    label: 'Profile',
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const FacultyProfileScreen(),
-                        ),
-                      );
-                    },
-                  ),
+                _DrawerItem(
+                  icon: Icons.person_outline,
+                  label: 'Profile',
+                  onTap: () {
+                    Navigator.pop(context);
+                    // TODO: navigate to Profile screen
+                  },
+                ),
                 _DrawerItem(
                   icon: Icons.today,
                   label: 'Today',
